@@ -1,4 +1,4 @@
-// routes/postRoutes.js - VERSION COMPLÈTE ET FONCTIONNELLE
+// routes/postRoutes.js - VERSION CORRIGÉE
 const express = require('express');
 const router = express.Router();
 const postController = require('../controllers/postController');
@@ -13,6 +13,9 @@ router.get('/featured', postController.getFeaturedPosts);
 router.get('/recent', postController.getRecentPosts);
 router.get('/:id', postController.getPostById);
 
+// Récupérer une image complète
+router.get('/:postId/images/:imageId', postController.getFullImage);
+
 // ============ ROUTES AUTHENTIFIÉES ============
 router.use(authenticate);
 
@@ -26,6 +29,10 @@ router.use(isAdmin);
 router.post('/', uploadPostFiles, postController.createPost);
 router.put('/:id', postController.updatePost);
 router.delete('/:id', postController.deletePost);
+
+// Gestion des images
+router.post('/:id/images', uploadPostFiles, postController.addImagesToPost);
+router.delete('/:postId/images/:imageId', postController.deleteImageFromPost);
 
 // Gestion statut
 router.put('/:id/featured', postController.toggleFeatured);

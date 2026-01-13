@@ -1,5 +1,17 @@
-// src/models/Post.js - VERSION SIMPLE
+
+// src/models/Post.js - VERSION AVEC IMAGES EN BASE64
 const mongoose = require('mongoose');
+
+const imageSchema = new mongoose.Schema({
+  filename: String,
+  originalName: String,
+  mimetype: String,
+  size: Number,
+  base64: String, // Stockage base64
+  thumbnailBase64: String, // Version miniature base64
+  isMain: { type: Boolean, default: false },
+  uploadedAt: { type: Date, default: Date.now }
+});
 
 const postSchema = new mongoose.Schema({
   title: { type: String, required: true },
@@ -16,14 +28,8 @@ const postSchema = new mongoose.Schema({
   },
   author: { type: mongoose.Schema.Types.ObjectId, ref: 'Member' },
   
-  // Images
-  images: [{
-    url: String,
-    filename: String,
-    originalName: String,
-    size: Number,
-    isMain: { type: Boolean, default: false }
-  }],
+  // Images stockées en base64
+  images: [imageSchema],
   
   // Interactions
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Member' }],
@@ -34,11 +40,11 @@ const postSchema = new mongoose.Schema({
   status: { 
     type: String, 
     enum: ['publié', 'brouillon', 'archivé'], 
-    default: 'publié' 
+    default: 'brouillon' 
   },
   featured: { type: Boolean, default: false },
-  isPublished: { type: Boolean, default: true },
-  publishDate: { type: Date, default: Date.now },
+  isPublished: { type: Boolean, default: false },
+  publishDate: { type: Date },
   
   // Tags
   tags: [String]
@@ -48,5 +54,14 @@ const postSchema = new mongoose.Schema({
 
 // Index pour la recherche
 postSchema.index({ title: 'text', content: 'text', tags: 'text' });
+
+// Middleware avant sauvegarde
+postSchema.pre('save', function(next) {
+  if (this.status === 'publié' && !this.publishDate) {
+    this.publishDate = new Date();
+    this.isPublished = true;
+  }
+  next();
+});
 
 module.exports = mongoose.model('Post', postSchema);

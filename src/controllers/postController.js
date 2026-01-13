@@ -1,8 +1,7 @@
-// controllers/postController.js - VERSION COMPLÈTE
+// controllers/postController.js - VERSION CORRIGÉE
 const Post = require('../models/Post');
 
 // ============ FONCTIONS PUBLIQUES ============
-
 exports.getAllPosts = async (req, res) => {
   try {
     const { 
@@ -26,7 +25,8 @@ exports.getAllPosts = async (req, res) => {
       .populate('author', 'prenom nom role')
       .sort(sort)
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .select('-images.base64'); // Exclure les grandes images
     
     const total = await Post.countDocuments(filter);
     
@@ -48,10 +48,99 @@ exports.getAllPosts = async (req, res) => {
   }
 };
 
+// ============ ADMIN ============
+exports.createPost = async (req, res) => {
+  try {
+    console.log('📝 Création post...');
+    console.log('📎 Corps de la requête:', req.body);
+    console.log('📸 Images traitées:', req.processedImages ? `Oui, ${req.processedImages.length} image(s)` : 'Non');
+    
+    const { title, content, type, category } = req.body;
+    
+    if (!title || !content) {
+      return res.status(400).json({
+        success: false,
+        message: 'Titre et contenu requis'
+      });
+    }
+    
+    const postData = {
+      title,
+      content,
+      type: type || 'actualité',
+      category: category || 'politique',
+      author: req.memberId,
+      status: 'publié',
+      isPublished: true,
+      publishDate: new Date()
+    };
+    
+    // Ajouter les images en base64
+    if (req.processedImages && Array.isArray(req.processedImages) && req.processedImages.length > 0) {
+      console.log(`📸 Ajout de ${req.processedImages.length} image(s) en base64`);
+      
+      postData.images = req.processedImages.map((img, index) => ({
+        filename: img.filename,
+        originalName: img.originalName,
+        mimetype: img.mimetype,
+        size: img.size,
+        base64: img.base64,
+        thumbnailBase64: img.thumbnailBase64,
+        isMain: index === 0,
+        uploadedAt: img.uploadedAt || new Date()
+      }));
+      
+      console.log('✅ Images ajoutées au post');
+    } else {
+      console.log('📭 Aucune image à ajouter');
+      postData.images = [];
+    }
+    
+    const post = new Post(postData);
+    await post.save();
+    
+    console.log(`✅ Post créé avec ${post.images.length} image(s)`);
+    
+    // Préparer la réponse
+    const postResponse = post.toObject();
+    
+    // Ne pas envoyer les grandes images base64 dans la réponse
+    if (postResponse.images && postResponse.images.length > 0) {
+      postResponse.images = postResponse.images.map(img => ({
+        _id: img._id,
+        filename: img.filename,
+        originalName: img.originalName,
+        mimetype: img.mimetype,
+        size: img.size,
+        thumbnailBase64: img.thumbnailBase64,
+        isMain: img.isMain,
+        uploadedAt: img.uploadedAt
+      }));
+    }
+    
+    res.status(201).json({
+      success: true,
+      message: 'Publication créée avec succès',
+      post: postResponse
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur createPost:', error);
+    console.error('Stack trace:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Fonctions existantes (simplifiées)
 exports.getPostById = async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
-      .populate('author', 'prenom nom role');
+      .populate('author', 'prenom nom role')
+      .select('-images.base64');
     
     if (!post) {
       return res.status(404).json({
@@ -74,6 +163,70 @@ exports.getPostById = async (req, res) => {
   }
 };
 
+exports.updatePost = async (req, res) => {
+  try {
+    const updates = req.body;
+    const postId = req.params.id;
+    
+    delete updates.author;
+    delete updates.likes;
+    delete updates.dislikes;
+    
+    const post = await Post.findByIdAndUpdate(
+      postId,
+      { $set: updates },
+      { new: true, runValidators: true }
+    ).populate('author', 'prenom nom role')
+     .select('-images.base64');
+    
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'Publication non trouvée'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Publication mise à jour',
+      post
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur updatePost:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur mise à jour'
+    });
+  }
+};
+
+exports.deletePost = async (req, res) => {
+  try {
+    const post = await Post.findByIdAndDelete(req.params.id);
+    
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'Publication non trouvée'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Publication supprimée'
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur deletePost:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur suppression'
+    });
+  }
+};
+
+// Autres fonctions...
 exports.searchPosts = async (req, res) => {
   try {
     const { q } = req.query;
@@ -85,7 +238,8 @@ exports.searchPosts = async (req, res) => {
     })
     .populate('author', 'prenom nom role')
     .sort('-publishDate')
-    .limit(50);
+    .limit(50)
+    .select('-images.base64');
     
     res.json({
       success: true,
@@ -111,7 +265,8 @@ exports.getFeaturedPosts = async (req, res) => {
     })
     .populate('author', 'prenom nom role')
     .sort('-publishDate')
-    .limit(10);
+    .limit(10)
+    .select('-images.base64');
     
     res.json({
       success: true,
@@ -138,7 +293,8 @@ exports.getRecentPosts = async (req, res) => {
     })
     .populate('author', 'prenom nom role')
     .sort('-publishDate')
-    .limit(parseInt(limit));
+    .limit(parseInt(limit))
+    .select('-images.base64');
     
     res.json({
       success: true,
@@ -154,8 +310,6 @@ exports.getRecentPosts = async (req, res) => {
     });
   }
 };
-
-// ============ INTERACTIONS ============
 
 exports.likePost = async (req, res) => {
   try {
@@ -231,129 +385,6 @@ exports.dislikePost = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erreur serveur'
-    });
-  }
-};
-
-// ============ ADMIN ============
-
-exports.createPost = async (req, res) => {
-  try {
-    console.log('📝 Création post...');
-    
-    const { title, content, type, category } = req.body;
-    
-    if (!title || !content) {
-      return res.status(400).json({
-        success: false,
-        message: 'Titre et contenu requis'
-      });
-    }
-    
-    const postData = {
-      title,
-      content,
-      type: type || 'actualité',
-      category: category || 'politique',
-      author: req.memberId
-    };
-    
-    // Gérer les images
-    if (req.files && req.files.images) {
-      const imagesArray = Array.isArray(req.files.images) 
-        ? req.files.images 
-        : [req.files.images];
-      
-      postData.images = imagesArray.map((img, index) => {
-        const url = `/uploads/images/posts/${img.filename}`;
-        
-        return {
-          path: img.path,
-          url: url,
-          filename: img.filename,
-          originalName: img.originalname,
-          size: img.size,
-          isMain: index === 0
-        };
-      });
-    }
-    
-    const post = new Post(postData);
-    await post.save();
-    
-    res.status(201).json({
-      success: true,
-      message: 'Publication créée',
-      post
-    });
-    
-  } catch (error) {
-    console.error('❌ Erreur createPost:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur création'
-    });
-  }
-};
-
-exports.updatePost = async (req, res) => {
-  try {
-    const updates = req.body;
-    const postId = req.params.id;
-    
-    delete updates.author;
-    delete updates.likes;
-    delete updates.dislikes;
-    
-    const post = await Post.findByIdAndUpdate(
-      postId,
-      { $set: updates },
-      { new: true, runValidators: true }
-    ).populate('author', 'prenom nom role');
-    
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'Publication non trouvée'
-      });
-    }
-    
-    res.json({
-      success: true,
-      message: 'Publication mise à jour',
-      post
-    });
-    
-  } catch (error) {
-    console.error('❌ Erreur updatePost:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur mise à jour'
-    });
-  }
-};
-
-exports.deletePost = async (req, res) => {
-  try {
-    const post = await Post.findByIdAndDelete(req.params.id);
-    
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'Publication non trouvée'
-      });
-    }
-    
-    res.json({
-      success: true,
-      message: 'Publication supprimée'
-    });
-    
-  } catch (error) {
-    console.error('❌ Erreur deletePost:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur suppression'
     });
   }
 };
@@ -457,6 +488,138 @@ exports.getPostsStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erreur serveur'
+    });
+  }
+};
+// Dans postController.js, ajoutez cette fonction :
+exports.getFullImage = async (req, res) => {
+  try {
+    const { postId, imageId } = req.params;
+    
+    const post = await Post.findOne({
+      _id: postId,
+      status: 'publié',
+      isPublished: true
+    });
+    
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'Publication non trouvée'
+      });
+    }
+    
+    const image = post.images.id(imageId);
+    if (!image || !image.base64) {
+      return res.status(404).json({
+        success: false,
+        message: 'Image non trouvée'
+      });
+    }
+    
+    res.json({
+      success: true,
+      image: {
+        _id: image._id,
+        filename: image.filename,
+        mimetype: image.mimetype,
+        base64: image.base64,
+        isMain: image.isMain
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur getFullImage:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur'
+    });
+  }
+};
+
+exports.addImagesToPost = async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const post = await Post.findById(postId);
+    
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'Publication non trouvée'
+      });
+    }
+    
+    if (req.processedImages && req.processedImages.length > 0) {
+      console.log(`📸 Ajout de ${req.processedImages.length} image(s)`);
+      
+      // Ajouter les nouvelles images
+      req.processedImages.forEach(img => {
+        post.images.push({
+          filename: img.filename,
+          originalName: img.originalName,
+          mimetype: img.mimetype,
+          size: img.size,
+          base64: img.base64,
+          thumbnailBase64: img.thumbnailBase64,
+          isMain: post.images.length === 0, // Si c'est la première image
+          uploadedAt: new Date()
+        });
+      });
+      
+      await post.save();
+    }
+    
+    res.json({
+      success: true,
+      message: `${req.processedImages?.length || 0} image(s) ajoutée(s)`,
+      postId: post._id
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur addImagesToPost:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de l\'ajout des images'
+    });
+  }
+};
+
+exports.deleteImageFromPost = async (req, res) => {
+  try {
+    const { postId, imageId } = req.params;
+    
+    const post = await Post.findById(postId);
+    
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'Publication non trouvée'
+      });
+    }
+    
+    // Trouver et supprimer l'image
+    const imageIndex = post.images.findIndex(img => img._id.toString() === imageId);
+    
+    if (imageIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Image non trouvée'
+      });
+    }
+    
+    post.images.splice(imageIndex, 1);
+    await post.save();
+    
+    res.json({
+      success: true,
+      message: 'Image supprimée'
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur deleteImageFromPost:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la suppression'
     });
   }
 };

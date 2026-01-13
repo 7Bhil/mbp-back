@@ -1,142 +1,84 @@
 // middleware/upload.js - VERSION CORRIGÉE
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 
-// Dossier racine - POINTE VERS uploads/ DANS src/
-const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
-console.log('📁 Chemin uploads:', UPLOADS_DIR);
-// Créer la structure
-const createUploadsStructure = () => {
-  const directories = [
-    UPLOADS_DIR,
-    path.join(UPLOADS_DIR, 'images', 'posts'),
-    path.join(UPLOADS_DIR, 'images', 'members'),
-    path.join(UPLOADS_DIR, 'documents', 'posts'),
-    path.join(UPLOADS_DIR, 'documents', 'members')
-  ];
-
-  directories.forEach(dir => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  });
-};
-
-createUploadsStructure();
-
-// Configuration multer
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    let folder = 'images/posts/';
-    
-    // Si c'est une route member
-    if (req.baseUrl && req.baseUrl.includes('members')) {
-      if (file.mimetype.startsWith('image/')) {
-        folder = 'images/members/';
-      } else {
-        folder = 'documents/members/';
-      }
-    } else {
-      // Route post
-      if (file.mimetype.startsWith('image/')) {
-        folder = 'images/posts/';
-      } else {
-        folder = 'documents/posts/';
-      }
-    }
-    
-    const destPath = path.join(UPLOADS_DIR, folder);
-    cb(null, destPath);
-  },
-  
-  filename: (req, file, cb) => {
-    const uniquePrefix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    const name = path.parse(file.originalname).name
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '-')
-      .substring(0, 50);
-    
-    const fileName = `${uniquePrefix}-${name}${ext}`;
-    cb(null, fileName);
-  }
-});
-
-// Filtrage
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = {
-    images: /jpeg|jpg|png|gif|webp|svg/,
-    documents: /pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv/
-  };
-  
-  const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
-  
-  if (file.mimetype.startsWith('image/') && allowedTypes.images.test(ext)) {
-    cb(null, true);
-  } else if (allowedTypes.documents.test(ext)) {
-    cb(null, true);
-  } else {
-    cb(new Error(`Type non supporté: ${file.originalname}`), false);
-  }
-};
+// Configuration multer pour mémoire
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage: storage,
-  fileFilter: fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024,
+    fileSize: 5 * 1024 * 1024, // 5MB max
     files: 10
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp|svg/;
+    const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
+    
+    if (file.mimetype.startsWith('image/') && allowedTypes.test(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Type d'image non supporté: ${ext}`), false);
+    }
   }
 });
 
-// Middlewares
-exports.uploadPostFiles = upload.fields([
-  { name: 'images', maxCount: 10 },
-  { name: 'files', maxCount: 5 }
-]);
+// Convertir en base64
+const convertToBase64 = (buffer, mimetype) => {
+  return `data:${mimetype};base64,${buffer.toString('base64')}`;
+};
+
+// Middleware pour traiter les uploads
+exports.processUploadToBase64 = async (req, res, next) => {
+  try {
+    console.log('🔄 Traitement des fichiers en base64...');
+    console.log('📎 Fichiers reçus:', req.files ? 'Oui' : 'Non');
+    
+    if (req.files && req.files.images) {
+      const imagesArray = Array.isArray(req.files.images) 
+        ? req.files.images 
+        : [req.files.images];
+      
+      const processedImages = [];
+      
+      for (const img of imagesArray) {
+        console.log(`📸 Traitement image: ${img.originalname} (${img.size} bytes)`);
+        
+        const base64Data = convertToBase64(img.buffer, img.mimetype);
+        
+        processedImages.push({
+          filename: img.originalname,
+          originalName: img.originalname,
+          mimetype: img.mimetype,
+          size: img.size,
+          base64: base64Data,
+          thumbnailBase64: base64Data, // Pour simplifier, même que l'original
+          isMain: processedImages.length === 0,
+          uploadedAt: new Date()
+        });
+      }
+      
+      console.log(`✅ ${processedImages.length} image(s) convertie(s) en base64`);
+      req.processedImages = processedImages;
+    } else {
+      console.log('📭 Aucune image à traiter');
+      req.processedImages = [];
+    }
+    
+    next();
+  } catch (error) {
+    console.error('❌ Erreur traitement base64:', error);
+    next(error);
+  }
+};
+
+// Middleware d'upload pour les posts
+exports.uploadPostFiles = [
+  upload.fields([
+    { name: 'images', maxCount: 10 }
+  ]),
+  exports.processUploadToBase64
+];
 
 exports.uploadMemberPhoto = upload.single('photo');
 exports.uploadSingleImage = upload.single('image');
-exports.uploadSingleFile = upload.single('file');
-
-// Utilitaires
-exports.deleteFile = (filePath) => {
-  // Convertir l'URL en chemin physique
-  let physicalPath;
-  
-  if (filePath.startsWith('/uploads/')) {
-    // URL -> chemin physique
-    physicalPath = path.join(__dirname, '..', filePath);
-  } else if (filePath.startsWith('uploads/')) {
-    // Chemin relatif
-    physicalPath = path.join(__dirname, '..', filePath);
-  } else {
-    // Déjà chemin physique
-    physicalPath = filePath;
-  }
-  
-  if (fs.existsSync(physicalPath)) {
-    try {
-      fs.unlinkSync(physicalPath);
-      console.log(`🗑️ Supprimé: ${physicalPath}`);
-      return true;
-    } catch (error) {
-      console.error(`❌ Erreur suppression: ${error.message}`);
-      return false;
-    }
-  }
-  return false;
-};
-
-// Fonction pour obtenir l'URL publique d'un fichier
-exports.getPublicUrl = (filePath) => {
-  if (!filePath) return null;
-  
-  // Si c'est déjà une URL
-  if (filePath.startsWith('http')) return filePath;
-  
-  // Convertir chemin physique en URL publique
-  const relativePath = path.relative(path.join(__dirname, '..', 'uploads'), filePath);
-  return `/uploads/${relativePath}`;
-};
