@@ -5,7 +5,7 @@ const fs = require('fs');
 
 // Dossier racine - POINTE VERS uploads/ DANS src/
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
-
+console.log('📁 Chemin uploads:', UPLOADS_DIR);
 // Créer la structure
 const createUploadsStructure = () => {
   const directories = [
