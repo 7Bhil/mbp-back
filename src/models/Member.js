@@ -194,6 +194,71 @@ memberSchema.pre('save', async function(next) {
   next();
 });
 
+// ==================== AJOUTEZ CETTE FONCTION ====================
+// Fonction statique pour créer l'admin par défaut
+memberSchema.statics.createDefaultAdmin = async function() {
+  try {
+    // Vérifier si un admin existe déjà
+    const existingAdmin = await this.findOne({ 
+      email: 'admin@gmail.com',
+      role: 'admin' 
+    });
+    
+    if (existingAdmin) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Compte admin déjà existant');
+      }
+      return existingAdmin;
+    }
+    
+    // Créer l'admin par défaut
+    const adminData = {
+      nom: 'Admin',
+      prenom: 'System',
+      email: 'admin@gmail.com',
+      phoneCode: '+229',
+      telephone: '00000000',
+      birthYear: 1990,
+      pays: 'Bénin',
+      department: 'Littoral',
+      commune: 'Cotonou',
+      profession: 'Fonctionnaire',
+      disponibilite: 'Temps plein',
+      motivation: 'Compte administrateur principal du Mouvement Patriotique du Bénin pour la gestion des membres et du système. Cette motivation contient plus de vingt caractères pour valider.',
+      password: 'admin123',
+      role: 'admin',
+      status: 'Actif',
+      isActive: true
+    };
+    
+    const admin = new this(adminData);
+    await admin.save();
+    
+    console.log('\n' + '='.repeat(60));
+    console.log('🎉 ADMIN CRÉÉ AUTOMATIQUEMENT !');
+    console.log('='.repeat(60));
+    console.log('📧 Email: admin@gmail.com');
+    console.log('🔑 Mot de passe: admin123');
+    console.log('🆔 Member ID:', admin.memberId);
+    console.log('='.repeat(60) + '\n');
+    
+    return admin;
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de la création de l\'admin:', error.message);
+    
+    // Afficher les détails de l'erreur en développement
+    if (process.env.NODE_ENV === 'development' && error.errors) {
+      Object.keys(error.errors).forEach(key => {
+        console.error(`- ${key}: ${error.errors[key].message}`);
+      });
+    }
+    
+    return null;
+  }
+};
+// ==================== FIN DE L'AJOUT ====================
+
 // Méthode pour vérifier le mot de passe
 memberSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
@@ -207,4 +272,37 @@ memberSchema.methods.toJSON = function() {
   return obj;
 };
 
-module.exports = mongoose.model('Member', memberSchema);
+const Member = mongoose.model('Member', memberSchema);
+
+// ==================== INITIALISATION AUTOMATIQUE ====================
+// Cette partie s'exécute une fois au chargement du modèle
+let adminInitialized = false;
+
+// Fonction d'initialisation différée
+async function initializeDefaultAdmin() {
+  if (adminInitialized) return;
+  adminInitialized = true;
+  
+  // Ne pas initialiser dans les tests
+  if (process.env.NODE_ENV === 'test') return;
+  
+  // Attendre que la connexion MongoDB soit établie
+  if (mongoose.connection.readyState === 1) {
+    // Connecté, créer l'admin immédiatement
+    setTimeout(async () => {
+      await Member.createDefaultAdmin();
+    }, 1000);
+  } else {
+    // Pas encore connecté, attendre la connexion
+    mongoose.connection.once('connected', async () => {
+      setTimeout(async () => {
+        await Member.createDefaultAdmin();
+      }, 1000);
+    });
+  }
+}
+
+// Démarrer l'initialisation
+setImmediate(initializeDefaultAdmin);
+
+module.exports = Member;
