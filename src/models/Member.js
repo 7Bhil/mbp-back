@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-
+//lkeURbDG5dci7pk9    
 const memberSchema = new mongoose.Schema({
   // Informations personnelles
   nom: {
