@@ -25,18 +25,12 @@ const createValidAdmin = async () => {
       console.log('⚠️  Déjà connecté à MongoDB');
     }
     
-    // Importer le vrai modèle Member
-    const Member = require('../models/Member');
+    // Importer le modèle depuis le dossier src/models
+    const Member = require('./src/models/Member'); // Changé pour src/models/
     
     // Supprimer l'ancien admin
     const deleteResult = await Member.deleteOne({ email: 'admin@gmail.com' });
     console.log(`🗑️  Ancien admin supprimé: ${deleteResult.deletedCount} document(s)`);
-    
-    // Générer hash
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash('admin123', salt);
-    
-    const now = new Date();
     
     // Créer admin avec des valeurs VALIDES selon le modèle
     const admin = new Member({
@@ -52,14 +46,13 @@ const createValidAdmin = async () => {
       profession: 'Fonctionnaire', // Doit être dans l'énum du modèle
       disponibilite: 'Temps plein', // Doit être dans l'énum du modèle
       motivation: 'Compte administrateur principal du Mouvement Patriotique du Bénin pour la gestion des membres et du système. Cette motivation contient plus de vingt caractères pour valider.',
-      password: hashedPassword, // Le middleware hash automatiquement
+      password: 'admin123', // Le middleware hash automatiquement
       role: 'admin',
       status: 'Actif',
       isActive: true,
       // memberId et membershipNumber seront générés automatiquement par le middleware pre-save
       // dateInscription sera généré automatiquement
       // subscriptionDate sera généré automatiquement
-      lastLogin: now
     });
     
     console.log('\n📋 Tentative de création admin avec valeurs:');
@@ -90,16 +83,18 @@ const createValidAdmin = async () => {
     console.log(`⏱️  Disponibilité: ${savedAdmin.disponibilite}`);
     console.log(`🆔 Member ID: ${savedAdmin.memberId}`);
     console.log(`#️⃣ Membership Number: ${savedAdmin.membershipNumber}`);
+    console.log(`🎯 Rôle: ${savedAdmin.role}`);
     console.log('='.repeat(60));
     
     // Vérifier la création
     const verifyAdmin = await Member.findOne({ email: 'admin@gmail.com' });
     if (verifyAdmin) {
-      console.log('✅ Admin vérifié dans la base de données');
+      console.log('\n✅ Admin vérifié dans la base de données');
       console.log(`📊 ID MongoDB: ${verifyAdmin._id}`);
       console.log(`👤 Nom complet: ${verifyAdmin.prenom} ${verifyAdmin.nom}`);
-      console.log(`🎯 Rôle: ${verifyAdmin.role}`);
       console.log(`📅 Date inscription: ${verifyAdmin.dateInscription}`);
+      console.log(`📞 Téléphone: ${verifyAdmin.phoneCode} ${verifyAdmin.telephone}`);
+      console.log(`📍 Localisation: ${verifyAdmin.commune}, ${verifyAdmin.department}, ${verifyAdmin.pays}`);
     } else {
       console.log('❌ ERREUR: Admin non trouvé après création');
     }
@@ -108,24 +103,24 @@ const createValidAdmin = async () => {
     console.error('\n❌ ERREUR CRITIQUE:');
     console.error('Message:', error.message);
     console.error('Nom:', error.name);
-    console.error('Stack:', error.stack);
     
     // Afficher les erreurs de validation Mongoose
     if (error.name === 'ValidationError') {
       console.error('\n🔍 Erreurs de validation détaillées:');
       for (const field in error.errors) {
         console.error(`- ${field}: ${error.errors[field].message}`);
+        console.error(`  Valeur: ${error.errors[field].value}`);
       }
     }
     
-    // Afficher les erreurs Mongoose
-    if (error.name === 'MongoError') {
-      console.error('Code erreur MongoDB:', error.code);
+    // Afficher les erreurs de duplication
+    if (error.name === 'MongoError' && error.code === 11000) {
+      console.error('❌ Erreur de duplication (champ unique déjà existant)');
     }
     
     process.exit(1);
   } finally {
-    // Ne pas fermer la connexion immédiatement
+    // Attendre un peu avant de fermer
     setTimeout(async () => {
       try {
         if (mongoose.connection.readyState === 1) {
@@ -137,7 +132,7 @@ const createValidAdmin = async () => {
         console.error('Erreur fermeture connexion:', closeError.message);
         process.exit(1);
       }
-    }, 2000);
+    }, 3000);
   }
 };
 
