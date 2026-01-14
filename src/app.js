@@ -5,70 +5,71 @@ const path = require('path');
 const fs = require('fs');
 
 // Charger les variables d'environnement
-require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
-
-// Import des routes
-const authRoutes = require('./routes/authRoutes');
-const memberRoutes = require('./routes/memberRoutes');
-const adminRoutes = require('./routes/adminRoutes');
-const postRoutes = require('./routes/postRoutes');
-
-// Import du middleware d'upload
-const { uploadPostFiles } = require('./middleware/upload');
+require('dotenv').config();
 
 const app = express();
 
 // ============ CONFIGURATION ============
-// Chemin des uploads
-const UPLOADS_ROOT = path.join(__dirname, '..', '..', 'uploads');
+// Déterminer le chemin des uploads selon l'environnement
+const isRender = process.env.RENDER || false;
+const UPLOADS_ROOT = isRender 
+  ? path.join('/opt/render/project/uploads')
+  : path.join(__dirname, '..', '..', 'uploads');
+
 console.log('📁 Dossier uploads racine:', UPLOADS_ROOT);
+console.log('🌍 Environnement:', process.env.NODE_ENV || 'development');
+console.log('🏗️  Sur Render:', isRender ? 'Oui' : 'Non');
+
+// Nettoyer l'URL client (enlever le slash à la fin)
+const cleanClientUrl = process.env.CLIENT_URL ? 
+  process.env.CLIENT_URL.replace(/\/$/, '') : '';
 
 // URLs client autorisées
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:5174',
-  process.env.CLIENT_URL, // URL de production (Netlify)
-  process.env.CLIENT_URL?.replace('https://', 'http://'), // Version HTTP
+  cleanClientUrl,
+  cleanClientUrl?.replace('https://', 'http://'),
   'https://mouvementpatriotiquedubenin.netlify.app',
-  'http://mouvementpatriotiquedubenin.netlify.app'
-].filter(Boolean); // Supprime les valeurs undefined
+  'http://mouvementpatriotiquedubenin.netlify.app',
+  // Pour Render Preview
+  'https://mpb-backend.onrender.com',
+  'http://mpb-backend.onrender.com'
+].filter((origin, index, self) => 
+  origin && self.indexOf(origin) === index
+);
 
 console.log('🌐 URLs client autorisées:', allowedOrigins);
 
-// ============ CORS COMPLET POUR PRODUCTION ============
-app.use(cors({
+// ============ CORS POUR PRODUCTION ============
+const corsOptions = {
   origin: function (origin, callback) {
-    // Autoriser les requêtes sans origine
-    if (!origin) return callback(null, true);
-    
-    // Vérifier si l'origine est dans la liste autorisée
-    if (allowedOrigins.includes(origin)) {
+    // En développement ou sur Render, être plus permissif
+    if (process.env.NODE_ENV !== 'production' || isRender) {
       return callback(null, true);
     }
     
-    // Pour le développement, on peut être plus permissif
-    if (process.env.NODE_ENV === 'development') {
-      console.warn(`⚠️  Origine non autorisée en développement: ${origin}`);
+    // En production stricte, vérifier l'origine
+    if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     
-    // En production, rejeter les origines non autorisées
-    console.error(`🚫 Origine non autorisée en production: ${origin}`);
+    console.error(`🚫 Origine non autorisée: ${origin}`);
     return callback(new Error('Not allowed by CORS'), false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
-  exposedHeaders: ['Content-Disposition', 'Set-Cookie']
-}));
+  exposedHeaders: ['Content-Disposition']
+};
 
-// Gérer les pré-vols OPTIONS
-app.options('*', cors());
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // ============ MIDDLEWARES ============
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // ============ CRÉATION DES DOSSIERS UPLOADS ============
 const createUploadsStructure = () => {
@@ -83,7 +84,7 @@ const createUploadsStructure = () => {
   directories.forEach(dir => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
-      console.log(`✅ Dossier créé: ${path.relative(path.join(__dirname, '..'), dir)}`);
+      console.log(`✅ Dossier créé: ${dir}`);
     }
   });
 };
@@ -91,27 +92,58 @@ const createUploadsStructure = () => {
 createUploadsStructure();
 
 // ============ CONNEXION MONGODB ============
-console.log('🔗 Connexion MongoDB...');
-console.log('🔑 MongoDB URI:', process.env.MONGODB_URI ? '✓ Définie' : '✗ Non définie');
+console.log('\n🔗 Connexion MongoDB...');
 
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/mpb', {
+// URI MongoDB selon l'environnement
+const mongoURI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/mpb_db';
+
+if (!mongoURI.includes('localhost') && !mongoURI.includes('127.0.0.1')) {
+  console.log('🔐 Connexion à MongoDB Atlas/Cloud');
+} else {
+  console.log('🏠 Connexion à MongoDB local');
+  console.warn('⚠️  ATTENTION: MongoDB local - Vérifiez que MongoDB est démarré!');
+}
+
+mongoose.connect(mongoURI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 30000, // 30 secondes
+  socketTimeoutMS: 45000, // 45 secondes
 })
 .then(() => {
-  console.log('✅ MongoDB connecté!');
+  console.log('✅ MongoDB connecté avec succès!');
+  console.log(`📊 Base de données: ${mongoose.connection.name}`);
 })
 .catch(err => {
-  console.error('❌ Erreur MongoDB:', err.message);
-  process.exit(1);
+  console.error('❌ ERREUR MongoDB:', err.message);
+  
+  if (mongoURI.includes('localhost') || mongoURI.includes('127.0.0.1')) {
+    console.log('\n💡 CONSEIL POUR MONGODB LOCAL:');
+    console.log('1. Démarrer MongoDB: sudo systemctl start mongod');
+    console.log('2. Vérifier le statut: sudo systemctl status mongod');
+    console.log('3. Activer au démarrage: sudo systemctl enable mongod');
+  }
+  
+  // Ne pas quitter immédiatement en production, laisser le serveur démarrer
+  if (process.env.NODE_ENV === 'production') {
+    console.log('⚠️  Le serveur démarre sans connexion MongoDB');
+  } else {
+    process.exit(1);
+  }
 });
 
-// ============ FONCTION POUR CRÉER L'ADMIN AUTOMATIQUEMENT ============
+// ============ FONCTION POUR CRÉER L'ADMIN ============
 async function createDefaultAdmin() {
   try {
+    // Attendre que MongoDB soit connecté
+    if (mongoose.connection.readyState !== 1) {
+      console.log('⏳ En attente de la connexion MongoDB pour créer l\'admin...');
+      return;
+    }
+    
     console.log('\n👑 Vérification du compte administrateur...');
     
-    // Importer le modèle Member - chemin corrigé
+    // Importer le modèle Member
     const Member = require('./models/Member');
     
     // Vérifier si un admin existe déjà
@@ -128,7 +160,7 @@ async function createDefaultAdmin() {
       return;
     }
     
-    // Si aucun admin n'existe, en créer un
+    // Créer l'admin
     console.log('👑 Création du compte administrateur par défaut...');
     
     const adminData = {
@@ -163,77 +195,49 @@ async function createDefaultAdmin() {
     console.log('='.repeat(60) + '\n');
     
   } catch (error) {
-    console.error('⚠️ Erreur lors de la création de l\'admin:', error.message);
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Stack:', error.stack);
-    }
+    console.error('⚠️ Erreur création admin:', error.message);
   }
 }
 
-// ============ INITIALISATION APRÈS CONNEXION MONGODB ============
-mongoose.connection.once('open', async () => {
-  console.log('✅ Connexion MongoDB établie');
+// ============ ÉVÉNEMENTS MONGODB ============
+mongoose.connection.on('connected', () => {
+  console.log('✅ Événement: MongoDB connecté');
   
-  // Attendre un peu pour être sûr que tout est initialisé
-  setTimeout(async () => {
-    await createDefaultAdmin();
-  }, 1000);
+  // Créer l'admin après connexion
+  setTimeout(createDefaultAdmin, 2000);
 });
 
-// ============ SERVICE STATIQUE POUR LES UPLOADS ============
-app.use('/uploads', (req, res, next) => {
-  // Headers CORS pour les fichiers statiques
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  next();
-}, express.static(UPLOADS_ROOT));
-
-// ============ ROUTES DE DÉBOGAGE ============
-app.post('/api/debug/upload-test', uploadPostFiles, (req, res) => {
-  console.log('🔍 DEBUG - Files présent:', req.files ? 'Oui' : 'Non');
-  
-  res.json({
-    success: true,
-    message: 'Test upload réussi',
-    files: req.files ? Object.keys(req.files) : []
-  });
+mongoose.connection.on('error', (err) => {
+  console.error('❌ Événement: Erreur MongoDB', err.message);
 });
 
-app.get('/api/uploads/check', (req, res) => {
+mongoose.connection.on('disconnected', () => {
+  console.log('⚠️  Événement: MongoDB déconnecté');
+});
+
+// ============ SERVICE STATIQUE ============
+app.use('/uploads', express.static(UPLOADS_ROOT));
+
+// Route pour vérifier l'accès aux fichiers
+app.get('/api/uploads/list', (req, res) => {
   try {
-    const checkDir = (dir) => {
-      const exists = fs.existsSync(dir);
-      let files = [];
-      let count = 0;
-      
-      if (exists) {
-        files = fs.readdirSync(dir);
-        count = files.length;
-      }
-      
-      return { exists, count, files: files.slice(0, 5) };
-    };
+    const postsDir = path.join(UPLOADS_ROOT, 'images', 'posts');
+    let files = [];
     
-    const results = {
-      uploadsRoot: {
-        path: UPLOADS_ROOT,
-        ...checkDir(UPLOADS_ROOT)
-      },
-      imagesPosts: {
-        path: path.join(UPLOADS_ROOT, 'images', 'posts'),
-        ...checkDir(path.join(UPLOADS_ROOT, 'images', 'posts'))
-      }
-    };
+    if (fs.existsSync(postsDir)) {
+      files = fs.readdirSync(postsDir)
+        .filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f))
+        .map(file => ({
+          filename: file,
+          url: `${req.protocol}://${req.get('host')}/uploads/images/posts/${file}`,
+          size: fs.statSync(path.join(postsDir, file)).size
+        }));
+    }
     
     res.json({
       success: true,
-      message: 'Vérification des uploads',
-      results
+      count: files.length,
+      files: files
     });
   } catch (error) {
     res.status(500).json({
@@ -244,71 +248,66 @@ app.get('/api/uploads/check', (req, res) => {
 });
 
 // ============ ROUTES API ============
-app.use('/api/auth', authRoutes);
-app.use('/api/members', memberRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/posts', postRoutes);
+// Import des routes (assurez-vous que ces fichiers existent)
+try {
+  const authRoutes = require('./routes/authRoutes');
+  const memberRoutes = require('./routes/memberRoutes');
+  const adminRoutes = require('./routes/adminRoutes');
+  const postRoutes = require('./routes/postRoutes');
+  
+  app.use('/api/auth', authRoutes);
+  app.use('/api/members', memberRoutes);
+  app.use('/api/admin', adminRoutes);
+  app.use('/api/posts', postRoutes);
+  
+  console.log('✅ Routes API chargées');
+} catch (error) {
+  console.error('⚠️ Erreur chargement routes:', error.message);
+}
 
-// ============ ROUTE SANTÉ ============
+// ============ ROUTES DE BASE ============
 app.get('/api/health', (req, res) => {
-  const memUsage = process.memoryUsage();
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
   
   res.json({
     success: true,
-    message: 'API MPB - Mouvement Patriotique du Bénin',
+    message: 'MPB API Server',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    clientUrl: process.env.CLIENT_URL,
-    database: mongoose.connection.readyState === 1 ? 'connecté' : 'déconnecté',
-    allowedOrigins: allowedOrigins,
-    memory: {
-      rss: `${Math.round(memUsage.rss / 1024 / 1024)} MB`,
-      heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)} MB`,
-      heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)} MB`
+    render: isRender,
+    database: dbStatus,
+    clientUrl: cleanClientUrl,
+    uploadsPath: UPLOADS_ROOT,
+    endpoints: {
+      auth: '/api/auth',
+      members: '/api/members',
+      admin: '/api/admin',
+      posts: '/api/posts',
+      uploads: '/api/uploads/list',
+      health: '/api/health'
     }
   });
 });
 
-// ============ ROUTE 404 ============
-app.use('/api/*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Route API non trouvée',
-    requestedUrl: req.originalUrl
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Bienvenue sur l\'API du Mouvement Patriotique du Bénin',
+    documentation: 'Consultez /api/health pour plus d\'informations',
+    version: '1.0.0'
   });
 });
 
 // ============ GESTION DES ERREURS ============
 app.use((err, req, res, next) => {
-  console.error('🔥 Erreur serveur:', err.message);
+  console.error('🔥 Erreur:', err.message);
   
-  // Erreurs spécifiques
-  if (err.name === 'CorsError') {
-    return res.status(403).json({
-      success: false,
-      message: 'Accès CORS interdit'
-    });
-  }
+  const statusCode = err.statusCode || 500;
   
-  if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({
-      success: false,
-      message: 'Fichier trop volumineux (max 10MB)'
-    });
-  }
-  
-  if (err.name === 'MulterError') {
-    return res.status(400).json({
-      success: false,
-      message: `Erreur d'upload: ${err.message}`
-    });
-  }
-  
-  // Erreur générique
-  res.status(500).json({
+  res.status(statusCode).json({
     success: false,
-    message: 'Erreur serveur',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    message: err.message || 'Erreur serveur',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });
 
@@ -318,18 +317,18 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`\n🎯 ==============================================`);
   console.log(`🚀 Serveur MPB démarré sur le port ${PORT}`);
-  console.log(`🌐 Environnement: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📡 URL API: http://localhost:${PORT}/api`);
-  console.log(`🌍 Client URL: ${process.env.CLIENT_URL || 'Non définie'}`);
-  console.log(`🔐 CORS: ${allowedOrigins.length} origine(s) autorisée(s)`);
-  console.log(`📁 Uploads: http://localhost:${PORT}/uploads`);
-  console.log(`💪 Health: http://localhost:${PORT}/api/health`);
+  console.log(`🌍 URL: http://localhost:${PORT}`);
+  console.log(`📡 API: http://localhost:${PORT}/api`);
+  console.log(`🔧 Environnement: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🎯 ==============================================\n`);
   
-  // Vérifier les images existantes
-  const postsDir = path.join(UPLOADS_ROOT, 'images', 'posts');
-  if (fs.existsSync(postsDir)) {
-    const files = fs.readdirSync(postsDir);
-    console.log(`📸 ${files.length} image(s) dans uploads/images/posts/`);
+  // Afficher les infos MongoDB
+  if (mongoose.connection.readyState === 1) {
+    console.log(`📊 MongoDB: Connecté à ${mongoose.connection.name}`);
+  } else {
+    console.log(`⚠️  MongoDB: Non connecté (état: ${mongoose.connection.readyState})`);
   }
 });
+
+// Export pour les tests
+module.exports = app;
