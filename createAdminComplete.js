@@ -6,49 +6,31 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const createValidAdmin = async () => {
+  let connection;
+  
   try {
     const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mpb_db';
     
     console.log('🔗 Connexion à MongoDB...');
+    console.log('URI:', MONGODB_URI);
     
-    await mongoose.connect(MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    // Vérifier si Mongoose est déjà connecté
+    if (mongoose.connection.readyState === 0) {
+      connection = await mongoose.connect(MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+      });
+      console.log('✅ Connecté à MongoDB');
+    } else {
+      console.log('⚠️  Déjà connecté à MongoDB');
+    }
     
-    console.log('✅ Connecté à MongoDB');
-    
-    // Schéma temporaire
-    const MemberSchema = new mongoose.Schema({
-      nom: String,
-      prenom: String,
-      email: String,
-      phoneCode: String,
-      telephone: String,
-      birthYear: Number,
-      age: Number,
-      pays: String,
-      department: String,
-      commune: String,
-      profession: String,
-      disponibilite: String,
-      motivation: String,
-      password: String,
-      role: String,
-      status: String,
-      isActive: Boolean,
-      memberId: String,
-      membershipNumber: String,
-      dateInscription: Date,
-      subscriptionDate: String,
-      lastLogin: Date
-    });
-    
-    const Member = mongoose.models.Member || mongoose.model('Member', MemberSchema);
+    // Importer le vrai modèle Member
+    const Member = require('../models/Member');
     
     // Supprimer l'ancien admin
-    await Member.deleteOne({ email: 'admin@gmail.com' });
-    console.log('🗑️  Ancien admin supprimé');
+    const deleteResult = await Member.deleteOne({ email: 'admin@gmail.com' });
+    console.log(`🗑️  Ancien admin supprimé: ${deleteResult.deletedCount} document(s)`);
     
     // Générer hash
     const salt = await bcrypt.genSalt(10);
@@ -56,7 +38,7 @@ const createValidAdmin = async () => {
     
     const now = new Date();
     
-    // Créer admin avec des valeurs VALIDES
+    // Créer admin avec des valeurs VALIDES selon le modèle
     const admin = new Member({
       nom: 'Admin',
       prenom: 'System',
@@ -64,50 +46,100 @@ const createValidAdmin = async () => {
       phoneCode: '+229',
       telephone: '00000000',
       birthYear: 1990,
-      age: now.getFullYear() - 1990,
       pays: 'Bénin',
-      department: 'Littoral',
+      department: 'Littoral', // Si pays = Bénin, requis
       commune: 'Cotonou',
-      // Utiliser une valeur valide pour profession
-      profession: 'Fonctionnaire', // ou 'Entrepreneur', 'Employé', etc.
-      // Valeurs valides pour disponibilite
-      disponibilite: 'Temps plein',
-      motivation: 'Compte administrateur principal du Mouvement Patriotique du Bénin pour la gestion des membres et du système.',
-      password: hashedPassword,
+      profession: 'Fonctionnaire', // Doit être dans l'énum du modèle
+      disponibilite: 'Temps plein', // Doit être dans l'énum du modèle
+      motivation: 'Compte administrateur principal du Mouvement Patriotique du Bénin pour la gestion des membres et du système. Cette motivation contient plus de vingt caractères pour valider.',
+      password: hashedPassword, // Le middleware hash automatiquement
       role: 'admin',
       status: 'Actif',
       isActive: true,
-      memberId: 'MPB-ADMIN-001',
-      membershipNumber: 'MPB-ADMIN-2024-001',
-      dateInscription: now,
-      subscriptionDate: now.toLocaleDateString('fr-FR'),
+      // memberId et membershipNumber seront générés automatiquement par le middleware pre-save
+      // dateInscription sera généré automatiquement
+      // subscriptionDate sera généré automatiquement
       lastLogin: now
     });
     
-    await admin.save();
+    console.log('\n📋 Tentative de création admin avec valeurs:');
+    console.log('- Profession:', admin.profession, '(valide:', ['Étudiant', 'Employé', 'Fonctionnaire', 'Entrepreneur', 'Commerçant', 'Agriculteur', 'Artisan', 'Profession libérale', 'Retraité', 'Sans emploi', 'Autre'].includes(admin.profession) ? 'OUI' : 'NON', ')');
+    console.log('- Disponibilité:', admin.disponibilite, '(valide:', ['Quelques heures par semaine', '1-2 jours par semaine', '3-4 jours par semaine', 'Temps plein', 'Weekends uniquement'].includes(admin.disponibilite) ? 'OUI' : 'NON', ')');
+    console.log('- Longueur motivation:', admin.motivation.length, 'caractères (minimum 20)');
+    
+    // Valider manuellement avant sauvegarde
+    try {
+      await admin.validate();
+      console.log('✅ Validation du schéma réussie');
+    } catch (validationError) {
+      console.error('❌ Erreur de validation:', validationError.message);
+      console.error('Détails:', validationError.errors);
+      throw validationError;
+    }
+    
+    // Sauvegarder
+    const savedAdmin = await admin.save();
     
     console.log('\n' + '='.repeat(60));
-    console.log('🎉 ADMIN CRÉÉ AVEC VALEURS VALIDES !');
+    console.log('🎉 ADMIN CRÉÉ AVEC SUCCÈS !');
     console.log('='.repeat(60));
     console.log('👑 IDENTIFIANTS :');
-    console.log(`📧 Email    : ${admin.email}`);
-    console.log(`🔑 Mot de passe : admin123`);
-    console.log(`👔 Profession : ${admin.profession} (VALIDE)`);
-    console.log(`⏱️  Disponibilité : ${admin.disponibilite} (VALIDE)`);
+    console.log(`📧 Email: ${savedAdmin.email}`);
+    console.log(`🔑 Mot de passe: admin123`);
+    console.log(`👔 Profession: ${savedAdmin.profession}`);
+    console.log(`⏱️  Disponibilité: ${savedAdmin.disponibilite}`);
+    console.log(`🆔 Member ID: ${savedAdmin.memberId}`);
+    console.log(`#️⃣ Membership Number: ${savedAdmin.membershipNumber}`);
     console.log('='.repeat(60));
     
-    // Vérifier
-    const savedAdmin = await Member.findOne({ email: 'admin@gmail.com' });
-    console.log('✅ Admin enregistré avec succès');
-    console.log(`📊 ID: ${savedAdmin._id}`);
-    
-    mongoose.connection.close();
+    // Vérifier la création
+    const verifyAdmin = await Member.findOne({ email: 'admin@gmail.com' });
+    if (verifyAdmin) {
+      console.log('✅ Admin vérifié dans la base de données');
+      console.log(`📊 ID MongoDB: ${verifyAdmin._id}`);
+      console.log(`👤 Nom complet: ${verifyAdmin.prenom} ${verifyAdmin.nom}`);
+      console.log(`🎯 Rôle: ${verifyAdmin.role}`);
+      console.log(`📅 Date inscription: ${verifyAdmin.dateInscription}`);
+    } else {
+      console.log('❌ ERREUR: Admin non trouvé après création');
+    }
     
   } catch (error) {
-    console.error('❌ Erreur:', error.message);
-    console.log('💡 Détails:', error.errors || error);
+    console.error('\n❌ ERREUR CRITIQUE:');
+    console.error('Message:', error.message);
+    console.error('Nom:', error.name);
+    console.error('Stack:', error.stack);
+    
+    // Afficher les erreurs de validation Mongoose
+    if (error.name === 'ValidationError') {
+      console.error('\n🔍 Erreurs de validation détaillées:');
+      for (const field in error.errors) {
+        console.error(`- ${field}: ${error.errors[field].message}`);
+      }
+    }
+    
+    // Afficher les erreurs Mongoose
+    if (error.name === 'MongoError') {
+      console.error('Code erreur MongoDB:', error.code);
+    }
+    
     process.exit(1);
+  } finally {
+    // Ne pas fermer la connexion immédiatement
+    setTimeout(async () => {
+      try {
+        if (mongoose.connection.readyState === 1) {
+          await mongoose.connection.close();
+          console.log('\n🔌 Connexion MongoDB fermée');
+        }
+        process.exit(0);
+      } catch (closeError) {
+        console.error('Erreur fermeture connexion:', closeError.message);
+        process.exit(1);
+      }
+    }, 2000);
   }
 };
 
+// Exécuter le script
 createValidAdmin();
