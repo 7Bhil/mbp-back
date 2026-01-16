@@ -1,4 +1,4 @@
-// src/app.js - VERSION SIMPLIFIÉE ET FONCTIONNELLE
+// src/app.js - VERSION CORRIGÉE
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -24,12 +24,19 @@ app.use(cors({
   origin: IS_PRODUCTION 
     ? ['https://mouvementpatriotiquedubenin.netlify.app']
     : ['http://localhost:5173', 'http://localhost:5174'],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
 }));
 
 // ============ MIDDLEWARES ESSENTIELS ============
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Logger
+app.use((req, res, next) => {
+  console.log(`📡 ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 // ============ CONNEXION MONGODB ============
 const MONGODB_URI = IS_PRODUCTION
@@ -47,24 +54,31 @@ mongoose.connect(MONGODB_URI, {
   console.error('❌ Erreur MongoDB:', err.message);
 });
 
-// ============ CHARGEMENT AUTOMATIQUE DES ROUTES ============
+// ============ CHARGEMENT DES ROUTES AVEC CHEMINS CORRECTS ============
 console.log('\n🛣️  Chargement des routes...');
 
-const routeFiles = ['authRoutes', 'memberRoutes', 'adminRoutes', 'postRoutes', 'profileRoutes'];
+// Mapping spécifique pour vos routes
+const routeMapping = {
+  'authRoutes': '/api/auth',
+  'memberRoutes': '/api/members',      // ← CORRIGÉ: /api/members (pas /api/member)
+  'adminRoutes': '/api/admin',
+  'postRoutes': '/api/posts',          // ← CORRIGÉ: /api/posts (pas /api/post)
+  'profileRoutes': '/api/profile'
+};
 
-routeFiles.forEach(routeName => {
-  const routePath = path.join(__dirname, 'routes', `${routeName}.js`);
+Object.entries(routeMapping).forEach(([routeFile, routePath]) => {
+  const fullPath = path.join(__dirname, 'routes', `${routeFile}.js`);
   
-  if (fs.existsSync(routePath)) {
+  if (fs.existsSync(fullPath)) {
     try {
-      const route = require(routePath);
-      app.use(`/api/${routeName.replace('Routes', '').toLowerCase()}`, route);
-      console.log(`✅ /api/${routeName.replace('Routes', '').toLowerCase()} chargé`);
+      const route = require(fullPath);
+      app.use(routePath, route);
+      console.log(`✅ ${routePath} chargé (${routeFile}.js)`);
     } catch (error) {
-      console.log(`⚠️  Erreur ${routeName}:`, error.message);
+      console.log(`⚠️  Erreur ${routeFile}:`, error.message);
     }
   } else {
-    console.log(`⚠️  ${routeName}.js non trouvé`);
+    console.log(`⚠️  ${routeFile}.js non trouvé`);
   }
 });
 
@@ -76,7 +90,8 @@ app.get('/api/health', (req, res) => {
     success: true,
     message: 'MPB API - Opérationnel',
     timestamp: new Date().toISOString(),
-    environment: IS_PRODUCTION ? 'production' : 'development'
+    environment: IS_PRODUCTION ? 'production' : 'development',
+    routes: Object.values(routeMapping)
   });
 });
 
@@ -85,20 +100,87 @@ app.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'API Mouvement Patriotique du Bénin',
+    version: '1.0.0',
     endpoints: {
-      health: '/api/health',
+      health: 'GET /api/health',
       login: 'POST /api/auth/login',
-      register: 'POST /api/auth/register'
+      register: 'POST /api/auth/register',
+      members: 'GET /api/members/all',
+      posts: 'GET /api/posts'
     }
+  });
+});
+
+// ============ ROUTES DE TEST POUR DEBUG ============
+
+// Test pour /api/members/all
+app.get('/api/members/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Route test /api/members fonctionnelle',
+    data: [
+      { id: 1, nom: 'Test', prenom: 'User' }
+    ]
+  });
+});
+
+// Test pour /api/posts
+app.get('/api/posts/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Route test /api/posts fonctionnelle',
+    posts: [
+      { id: 1, title: 'Test Post', content: 'Contenu test' }
+    ]
+  });
+});
+
+// Route pour voir toutes les routes chargées
+app.get('/api/routes', (req, res) => {
+  const routes = [];
+  
+  app._router.stack.forEach(middleware => {
+    if (middleware.route) {
+      routes.push({
+        path: middleware.route.path,
+        methods: Object.keys(middleware.route.methods)
+      });
+    } else if (middleware.name === 'router') {
+      middleware.handle.stack.forEach(handler => {
+        if (handler.route) {
+          routes.push({
+            path: handler.route.path,
+            methods: Object.keys(handler.route.methods)
+          });
+        }
+      });
+    }
+  });
+  
+  res.json({
+    success: true,
+    routes: routes.filter(r => r.path.startsWith('/api'))
   });
 });
 
 // ============ GESTION DES ERREURS ============
 app.use('/api/*', (req, res) => {
+  console.log(`❌ Route non trouvée: ${req.method} ${req.originalUrl}`);
+  
+  // Suggérer les routes disponibles
+  const availableRoutes = [];
+  app._router.stack.forEach(middleware => {
+    if (middleware.route && middleware.route.path.startsWith('/api')) {
+      availableRoutes.push(middleware.route.path);
+    }
+  });
+  
   res.status(404).json({
     success: false,
     message: 'Endpoint non trouvé',
-    path: req.originalUrl
+    path: req.originalUrl,
+    method: req.method,
+    availableRoutes: availableRoutes.slice(0, 10) // 10 premières
   });
 });
 
@@ -106,7 +188,8 @@ app.use((err, req, res, next) => {
   console.error('🔥 Erreur:', err.message);
   res.status(500).json({
     success: false,
-    message: 'Erreur serveur'
+    message: 'Erreur serveur',
+    error: IS_PRODUCTION ? undefined : err.message
   });
 });
 
@@ -116,7 +199,15 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('🎉 SERVEUR PRÊT !');
   console.log('='.repeat(50));
   console.log(`📍 Local: http://localhost:${PORT}`);
-  console.log(`🌍 Public: http://0.0.0.0:${PORT}`);
+  console.log(`🌍 Réseau: http://0.0.0.0:${PORT}`);
+  console.log('='.repeat(50));
+  
+  console.log('\n🔗 Routes disponibles:');
+  console.log(`✅ GET  /api/health`);
+  console.log(`✅ POST /api/auth/login`);
+  console.log(`✅ GET  /api/members/all`);
+  console.log(`✅ GET  /api/posts`);
+  console.log(`✅ GET  /api/routes (pour debug)`);
   console.log('='.repeat(50));
 });
 
