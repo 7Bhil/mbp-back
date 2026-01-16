@@ -9,8 +9,10 @@ router.use(authenticate);
 // Profil
 router.get('/profile', memberController.getProfile);
 router.put('/profile', memberController.updateProfile);
+router.post('/profile/complete', memberController.completeProfile);
+router.get('/profile/status', memberController.getProfileStatus);
 
-// Admin (pour le moment accessible à tous les membres authentifiés)
+// Lister tous les membres (pour admin/membres)
 router.get('/all', memberController.getAllMembers);
 
 module.exports = router;

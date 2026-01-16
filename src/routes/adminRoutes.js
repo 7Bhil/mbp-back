@@ -21,4 +21,7 @@ router.post('/members/:id/promote', adminController.promoteToAdmin);
 // Recherche
 router.get('/members/search/:query', adminController.searchMembers);
 
+// Nouvelle route : Profils incomplets
+router.get('/incomplete-profiles', adminController.getIncompleteProfiles);
+
 module.exports = router;

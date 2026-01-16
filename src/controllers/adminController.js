@@ -6,6 +6,7 @@ exports.getDashboardStats = async (req, res) => {
     const totalMembers = await Member.countDocuments();
     const activeMembers = await Member.countDocuments({ isActive: true });
     const admins = await Member.countDocuments({ role: 'admin' });
+    const completedProfiles = await Member.countDocuments({ profileCompleted: true });
     
     // Inscriptions récentes (7 derniers jours)
     const oneWeekAgo = new Date();
@@ -15,6 +16,20 @@ exports.getDashboardStats = async (req, res) => {
       dateInscription: { $gte: oneWeekAgo }
     });
     
+    // Distribution par âge
+    const ageDistribution = await Member.aggregate([
+      {
+        $bucket: {
+          groupBy: "$age",
+          boundaries: [16, 25, 35, 50, 65, 100],
+          default: "65+",
+          output: {
+            count: { $sum: 1 }
+          }
+        }
+      }
+    ]);
+    
     res.json({
       success: true,
       stats: {
@@ -22,7 +37,10 @@ exports.getDashboardStats = async (req, res) => {
         activeMembers,
         inactiveMembers: totalMembers - activeMembers,
         admins,
-        recentRegistrations
+        completedProfiles,
+        incompleteProfiles: totalMembers - completedProfiles,
+        recentRegistrations,
+        ageDistribution
       }
     });
     
@@ -90,7 +108,7 @@ exports.updateMember = async (req, res) => {
     delete updates.email;
     delete updates.password;
     delete updates.memberId;
-    delete updates.membershipNumber;
+    delete updates.dateInscription;
     
     const member = await Member.findByIdAndUpdate(
       memberId,
@@ -199,14 +217,38 @@ exports.searchMembers = async (req, res) => {
         { nom: { $regex: query, $options: 'i' } },
         { prenom: { $regex: query, $options: 'i' } },
         { email: { $regex: query, $options: 'i' } },
-        { membershipNumber: { $regex: query, $options: 'i' } }
+        { memberId: { $regex: query, $options: 'i' } },
+        { commune: { $regex: query, $options: 'i' } },
+        { ville: { $regex: query, $options: 'i' } }
       ]
     })
-    .select('nom prenom email role department commune isActive dateInscription')
+    .select('nom prenom email role departement commune ville age memberId profileCompleted isActive dateInscription')
     .limit(20);
     
     res.json({
       success: true,
+      members
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur'
+    });
+  }
+};
+
+// Récupérer les membres avec profil incomplet
+exports.getIncompleteProfiles = async (req, res) => {
+  try {
+    const members = await Member.find({ profileCompleted: false })
+      .select('nom prenom email age memberId profileCompleted dateInscription')
+      .sort('-dateInscription')
+      .limit(50);
+    
+    res.json({
+      success: true,
+      count: members.length,
       members
     });
     

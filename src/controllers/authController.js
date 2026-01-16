@@ -61,14 +61,19 @@ exports.register = async (req, res) => {
     });
   }
 };
-
 exports.login = async (req, res) => {
   try {
-    const { identifier, password, loginType, phoneCode, phoneNumber } = req.body;
+    const { identifier, password, loginType, code_telephone, phoneNumber } = req.body;
     
-    console.log('🔐 Tentative de connexion:', { identifier, loginType });
+    console.log('\n🔐 ===== DÉBUT CONNEXION =====');
+    console.log('📥 Données reçues:', { 
+      identifier, 
+      loginType,
+      passwordLength: password ? password.length : 0
+    });
     
     if (!password) {
+      console.log('❌ Mot de passe manquant');
       return res.status(400).json({
         success: false,
         message: 'Le mot de passe est requis'
@@ -79,28 +84,21 @@ exports.login = async (req, res) => {
     
     if (loginType === 'email') {
       // Recherche par email
-      member = await Member.findOne({ email: identifier.toLowerCase() });
-      console.log('👤 Membre trouvé par email:', member ? 'OUI' : 'NON');
-    } else {
-      // Recherche par téléphone
-      if (!phoneCode || !phoneNumber) {
-        return res.status(400).json({
-          success: false,
-          message: 'Le code pays et le numéro sont requis'
-        });
+      const emailToFind = identifier.toLowerCase().trim();
+      console.log('🔍 Recherche email:', emailToFind);
+      
+      member = await Member.findOne({ email: emailToFind });
+      
+      if (member) {
+        console.log('✅ Membre trouvé:');
+        console.log('   📧 Email:', member.email);
+        console.log('   👤 Nom:', member.nom, member.prenom);
+        console.log('   🎯 Rôle:', member.role);
+        console.log('   🔑 Password hash présent:', member.password ? 'OUI' : 'NON');
+        console.log('   📍 Département:', member.departement);
+      } else {
+        console.log('❌ Aucun membre avec cet email');
       }
-      
-      // Nettoyer le numéro
-      const cleanNumber = phoneNumber.replace(/[\s\-\.]/g, '');
-      
-      // Recherche approximative
-      const members = await Member.find({ 
-        phoneCode,
-        telephone: { $regex: cleanNumber }
-      });
-      
-      member = members[0];
-      console.log('👤 Membre trouvé par téléphone:', member ? 'OUI' : 'NON');
     }
     
     if (!member) {
@@ -111,16 +109,19 @@ exports.login = async (req, res) => {
       });
     }
     
-    console.log('👤 Détails membre trouvé:');
-    console.log('- Email:', member.email);
-    console.log('- ID:', member._id);
-    console.log('- Rôle:', member.role);
+    console.log('🔐 Comparaison mot de passe...');
+    
+    // VÉRIFICATION MANUELLE (debug)
+    console.log('   - Password fourni:', password);
+    console.log('   - Password hash en DB:', member.password ? 'présent' : 'absent');
+    console.log('   - Longueur hash:', member.password ? member.password.length : 0);
     
     // Vérifier le mot de passe
     const isValid = await member.comparePassword(password);
-    console.log('🔐 Validation mot de passe:', isValid ? 'OK' : 'ÉCHEC');
+    console.log('   - Résultat comparaison:', isValid ? '✅ OK' : '❌ ÉCHEC');
     
     if (!isValid) {
+      console.log('❌ Mot de passe incorrect');
       return res.status(401).json({
         success: false,
         message: 'Identifiants incorrects'
@@ -131,12 +132,13 @@ exports.login = async (req, res) => {
     member.lastLogin = new Date();
     await member.save();
     
-    // Générer le token (assurez-vous que JWT_SECRET est défini dans .env)
+    // Générer le token
     const token = jwt.sign({ id: member._id }, process.env.JWT_SECRET || 'default_secret_change_me', {
       expiresIn: process.env.JWT_EXPIRE || '30d'
     });
     
     console.log('✅ Connexion réussie pour:', member.email);
+    console.log('🔐 ===== FIN CONNEXION =====\n');
     
     res.json({
       success: true,
@@ -147,8 +149,6 @@ exports.login = async (req, res) => {
     
   } catch (error) {
     console.error('🔥 Erreur détaillée dans login:', error);
-    console.error('🔥 Stack:', error.stack);
-    
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la connexion',

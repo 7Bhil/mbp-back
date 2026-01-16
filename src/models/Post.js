@@ -1,5 +1,4 @@
-
-// src/models/Post.js - VERSION AVEC IMAGES EN BASE64
+// src/models/Post.js - VERSION COMPLÈTE AVEC ÉVÉNEMENTS
 const mongoose = require('mongoose');
 
 const imageSchema = new mongoose.Schema({
@@ -18,7 +17,7 @@ const postSchema = new mongoose.Schema({
   content: { type: String, required: true },
   type: { 
     type: String, 
-    enum: ['événement', 'actualité', 'communiqué', 'annonce', 'manifeste'],
+    enum: ['actualité', 'événement'],
     default: 'actualité'
   },
   category: {
@@ -27,6 +26,14 @@ const postSchema = new mongoose.Schema({
     default: 'politique'
   },
   author: { type: mongoose.Schema.Types.ObjectId, ref: 'Member' },
+  
+  // Champs spécifiques aux événements
+  eventDate: { type: Date },
+  eventTime: { type: String },
+  eventLocation: { type: String },
+  eventAddress: { type: String },
+  eventCity: { type: String },
+  eventContact: { type: String },
   
   // Images stockées en base64
   images: [imageSchema],
