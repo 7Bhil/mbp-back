@@ -26,27 +26,20 @@ console.log('─'.repeat(40));
 // URL MONGODB - LOGIQUE AMÉLIORÉE
 let MONGODB_URI;
 
-// 1. TOUJOURS vérifier la variable d'environnement d'abord
-if (process.env.MONGODB_URI) {
-  MONGODB_URI = process.env.MONGODB_URI;
-  console.log('✅ MONGODB_URI trouvée dans les variables d\'environnement');
-} else if (IS_PRODUCTION) {
-  // En production, on DOIT avoir MONGODB_URI
-  console.error('❌ ERREUR CRITIQUE: MONGODB_URI non définie en production!');
-  console.log('🔧 Configuration nécessaire sur Render:');
-  console.log('   1. Allez dans votre service Render');
-  console.log('   2. Cliquez sur "Environment"');
-  console.log('   3. Ajoutez cette variable:');
-  console.log('      Clé: MONGODB_URI');
-  console.log('      Valeur: mongodb+srv://USER:PASSWORD@cluster.mongodb.net/mpb_db?retryWrites=true&w=majority');
-  console.log('\n⚠️  Utilisation d\'une URL par défaut pour éviter le crash...');
+if (IS_PRODUCTION) {
+  // EN PRODUCTION : TOUJOURS utiliser MongoDB Atlas
+  MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://7bhil:lkeURbDG5dci7pk9@cluster0.hcpey4j.mongodb.net/mpb_db?retryWrites=true&w=majority';
   
-  // URL MongoDB Atlas par défaut
-  MONGODB_URI = 'mongodb+srv://7bhil:lkeURbDG5dci7pk9@cluster0.hcpey4j.mongodb.net/mpb_db?retryWrites=true&w=majority';
+  if (!process.env.MONGODB_URI) {
+    console.warn('⚠️  ATTENTION: MONGODB_URI non définie, utilisation de l\'URL par défaut');
+  }
+  
+  console.log('📊 Mode: PRODUCTION (MongoDB Atlas)');
+  
 } else {
   // Développement local
   MONGODB_URI = 'mongodb://localhost:27017/mpb_db';
-  console.log('🔧 Mode développement: MongoDB local');
+  console.log('📊 Mode: DÉVELOPPEMENT (MongoDB local)');
 }
 
 // Masquer les informations sensibles dans les logs
