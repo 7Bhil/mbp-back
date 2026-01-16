@@ -1,3 +1,4 @@
+// server.js (app.js principal)
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -7,153 +8,48 @@ require('dotenv').config();
 
 const app = express();
 
-// ============ CONFIGURATION ============
-const isRender = process.env.RENDER === 'true';
-const isDevelopment = process.env.NODE_ENV === 'development';
-const isProduction = process.env.NODE_ENV === 'production';
+// ============ CONFIGURATION DE BASE ============
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const IS_DEVELOPMENT = !IS_PRODUCTION;
 
-console.log('\n' + '='.repeat(60));
-console.log('🚀 DÉMARRAGE SERVEUR MPB - Mouvement Patriotique du Bénin');
 console.log('='.repeat(60));
-console.log(`🌍 Environnement: ${isProduction ? 'PRODUCTION' : 'DEVELOPPEMENT'}`);
-console.log(`🏢 Plateforme: ${isRender ? 'Render' : 'Local'}`);
-console.log(`📅 ${new Date().toLocaleString()}`);
-
-// ============ CONFIGURATION MONGODB ============
-console.log('\n🔗 CONFIGURATION MONGODB');
-
-let mongoURI;
-if (isProduction) {
-  mongoURI = process.env.MONGODB_URI;
-  
-  if (!mongoURI) {
-    console.error('❌ ERREUR CRITIQUE: MONGODB_URI non défini en production!');
-    console.log('\n🔧 CONFIGURATION REQUISE POUR RENDER:');
-    console.log('1. Variables d\'environnement nécessaires:');
-    console.log('   MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/mpb_db');
-    console.log('   NODE_ENV=production');
-    console.log('   JWT_SECRET=votre_secret_jwt_tres_long_et_securise');
-    console.log('   PORT=10000 (automatique sur Render)');
-    process.exit(1);
-  }
-  
-  console.log('📊 Mode: PRODUCTION (MongoDB Atlas)');
-} else {
-  mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mpb_db';
-  console.log('📊 Mode: DÉVELOPPEMENT (MongoDB local)');
-}
-
-// Masquer le mot de passe dans les logs
-const maskedURI = mongoURI ? mongoURI.replace(/mongodb\+srv:\/\/([^:]+):([^@]+)@/, 'mongodb+srv://***:***@') : 'undefined';
-console.log(`🔗 URI MongoDB: ${maskedURI}`);
-
-// Configuration mongoose
-const mongooseOptions = {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 15000,
-  connectTimeoutMS: 30000,
-  socketTimeoutMS: 45000,
-  retryWrites: true,
-  w: 'majority',
-  ...(isProduction ? {
-    ssl: true,
-    tlsAllowInvalidCertificates: false,
-    tlsAllowInvalidHostnames: false
-  } : {
-    family: 4
-  })
-};
-
-// ============ CONNEXION MONGODB AVEC RETRY ============
-async function connectToMongoDB() {
-  const maxRetries = 5;
-  const retryDelay = 5000;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`\n🔄 Tentative de connexion MongoDB ${attempt}/${maxRetries}...`);
-      
-      await mongoose.connect(mongoURI, mongooseOptions);
-      
-      const conn = mongoose.connection;
-      console.log(`✅ MongoDB connecté avec succès!`);
-      console.log(`📊 Base de données: ${conn.name}`);
-      console.log(`📍 Hôte: ${conn.host}`);
-      console.log(`🔢 Port: ${conn.port || 'N/A'}`);
-      
-      // Événements MongoDB
-      conn.on('connected', () => console.log('📡 Événement: MongoDB connecté'));
-      conn.on('disconnected', () => console.log('⚠️  Événement: MongoDB déconnecté'));
-      conn.on('error', (err) => console.error('❌ Erreur MongoDB:', err.message));
-      
-      return true;
-      
-    } catch (error) {
-      console.error(`❌ Tentative ${attempt} échouée:`, error.message);
-      
-      if (attempt < maxRetries) {
-        console.log(`⏳ Nouvelle tentative dans ${retryDelay/1000} secondes...`);
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-      } else {
-        console.error('\n❌ Impossible de se connecter à MongoDB après plusieurs tentatives');
-        console.log('\n🔧 DIAGNOSTIC:');
-        
-        if (isProduction) {
-          console.log('1. Vérifiez l\'URI MongoDB Atlas dans les variables d\'environnement');
-          console.log('2. Vérifiez les règles réseau sur MongoDB Atlas (0.0.0.0/0)');
-          console.log('3. Vérifiez le nom d\'utilisateur et mot de passe');
-        } else {
-          console.log('1. Vérifiez que MongoDB est en cours d\'exécution');
-          console.log('   $ mongod --version');
-          console.log('   $ brew services start mongodb-community  # macOS');
-          console.log('   $ sudo systemctl start mongod           # Linux');
-          console.log('   $ net start MongoDB                     # Windows');
-        }
-        
-        return false;
-      }
-    }
-  }
-}
+console.log('🚀 SERVEUR MPB - DÉMARRAGE');
+console.log('='.repeat(60));
+console.log(`📅 ${new Date().toLocaleString('fr-FR')}`);
+console.log(`🌍 Environnement: ${IS_PRODUCTION ? 'PRODUCTION' : 'DEVELOPPEMENT'}`);
+console.log();
 
 // ============ CONFIGURATION CORS ============
-const allowedOrigins = isDevelopment
+const ALLOWED_ORIGINS = IS_DEVELOPMENT
   ? [
       'http://localhost:3000',
       'http://localhost:5173',
       'http://localhost:5174',
       'http://127.0.0.1:5173',
-      'http://127.0.0.1:5174',
-      'http://localhost:5000'
+      'http://127.0.0.1:5174'
     ]
   : [
       'https://mouvementpatriotiquedubenin.netlify.app',
       'http://mouvementpatriotiquedubenin.netlify.app'
     ];
 
-console.log('\n🌐 CONFIGURATION CORS');
-console.log('Origines autorisées:', allowedOrigins);
+console.log('🌐 Configuration CORS:');
+ALLOWED_ORIGINS.forEach(origin => console.log(`   ✅ ${origin}`));
 
 app.use(cors({
-  origin: function (origin, callback) {
-    // Autoriser les requêtes sans origine (curl, postman, etc.)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
     } else {
-      const msg = `Origine non autorisée: ${origin}`;
-      console.warn('⚠️  CORS bloqué:', msg);
-      return callback(new Error(msg), false);
+      console.warn(`   ❌ Origine bloquée: ${origin}`);
+      callback(new Error('Non autorisé par CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Pré-vol des requêtes
 app.options('*', cors());
 
 // ============ MIDDLEWARES ============
@@ -162,252 +58,138 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Middleware de logging
 app.use((req, res, next) => {
-  console.log(`📥 ${req.method} ${req.url} - ${new Date().toISOString()}`);
+  console.log(`📡 ${req.method} ${req.originalUrl}`);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log('   📥 Body:', JSON.stringify(req.body, null, 2));
+  }
   next();
 });
 
-// ============ GESTION DES DOSSIERS UPLOADS ============
-let UPLOADS_ROOT;
-if (isRender) {
-  UPLOADS_ROOT = '/opt/render/project/uploads';
-} else {
-  UPLOADS_ROOT = path.join(__dirname, '..', '..', 'uploads');
-}
+// ============ CONFIGURATION MONGODB ============
+console.log('\n🔗 Configuration MongoDB:');
 
-console.log(`\n📁 CONFIGURATION DOSSIERS`);
-console.log(`Dossier uploads: ${UPLOADS_ROOT}`);
+const MONGODB_URI = process.env.MONGODB_URI || 
+  (IS_PRODUCTION 
+    ? 'mongodb+srv://7bhil:lkeURbDG5dci7pk9@cluster0.hcpey4j.mongodb.net/mpb_db?retryWrites=true&w=majority'
+    : 'mongodb://localhost:27017/mpb_db');
 
-// Créer la structure de dossiers
-const createUploadsStructure = () => {
-  const directories = [
-    UPLOADS_ROOT,
-    path.join(UPLOADS_ROOT, 'images', 'posts'),
-    path.join(UPLOADS_ROOT, 'images', 'members'),
-    path.join(UPLOADS_ROOT, 'documents')
-  ];
+console.log(`   📡 URL: ${MONGODB_URI.replace(/mongodb(\+srv)?:\/\/([^:]+):([^@]+)@/, 'mongodb$1://***:***@')}`);
 
-  directories.forEach(dir => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      console.log(`✅ Dossier créé: ${dir}`);
-    }
-  });
+const MONGOOSE_OPTIONS = {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 10000,
+  connectTimeoutMS: 15000,
 };
 
-createUploadsStructure();
-
-// Service statique pour les uploads
-app.use('/uploads', express.static(UPLOADS_ROOT));
-
-// ============ CRÉATION ADMIN AUTOMATIQUE ============
-async function createDefaultAdmin() {
+async function connectToMongoDB() {
   try {
-    console.log('\n👑 VÉRIFICATION COMPTE ADMINISTRATEUR');
+    await mongoose.connect(MONGODB_URI, MONGOOSE_OPTIONS);
+    console.log('   ✅ MongoDB connecté');
+    console.log(`   📊 Base: ${mongoose.connection.name}`);
+    console.log(`   🌐 Hôte: ${mongoose.connection.host}`);
     
-    // Vérifier que MongoDB est connecté
-    if (mongoose.connection.readyState !== 1) {
-      console.log('⏳ MongoDB pas encore prêt, nouvelle tentative dans 3s...');
-      setTimeout(createDefaultAdmin, 3000);
-      return;
-    }
-    
-    // Vérifier si les modèles sont disponibles
-    try {
-      var Member = require('./models/Member');
-    } catch (error) {
-      console.log('⏳ Modèle Member non disponible, nouvelle tentative dans 5s...');
-      setTimeout(createDefaultAdmin, 5000);
-      return;
-    }
-    
-    // Vérifier si l'admin existe déjà
-    const existingAdmin = await Member.findOne({ 
-      email: 'admin@mpb.bj',
-      role: 'admin' 
+    mongoose.connection.on('error', (err) => {
+      console.error('❌ Erreur MongoDB:', err.message);
     });
     
-    if (existingAdmin) {
-      console.log('✅ Administrateur existant:');
-      console.log(`   📧 Email: ${existingAdmin.email}`);
-      console.log(`   👤 Nom: ${existingAdmin.prenom} ${existingAdmin.nom}`);
-      console.log(`   🆔 ID: ${existingAdmin.memberId}`);
-      return;
-    }
+    mongoose.connection.on('disconnected', () => {
+      console.warn('⚠️  MongoDB déconnecté');
+    });
     
-    // Créer le compte admin
-    console.log('👑 CRÉATION DU COMPTE ADMINISTRATEUR PAR DÉFAUT');
-    
-    const adminData = {
-      nom: 'Admin',
-      prenom: 'System',
-      email: 'admin@mpb.bj',
-      age: 35,
-      code_telephone: '+229',
-      telephone: '00000000',
-      pays: 'Bénin',
-      departement: 'Littoral',
-      commune: 'Cotonou',
-      ville: 'Cotonou',
-      ville_mobilisation: 'Cotonou',
-      section: 'Administration',
-      centres_interet_competences: 'Gestion, Administration, Développement',
-      profession: 'Fonctionnaire',
-      disponibilite: 'Temps plein',
-      motivation: 'Compte administrateur principal du Mouvement Patriotique du Bénin.',
-      engagement_valeurs_mpb: true,
-      consentement_donnees: true,
-      password: 'AdminMPB2024!',
-      role: 'admin',
-      permissions: ['view_members', 'edit_members', 'delete_members', 'create_events', 'manage_settings'],
-      status: 'Actif',
-      isActive: true,
-      profileCompleted: true
-    };
-    
-    const admin = new Member(adminData);
-    await admin.save();
-    
-    console.log('\n' + '='.repeat(60));
-    console.log('🎉 ADMINISTRATEUR CRÉÉ AVEC SUCCÈS !');
-    console.log('='.repeat(60));
-    console.log('📧 Email: admin@mpb.bj');
-    console.log('🔑 Mot de passe: AdminMPB2024!');
-    console.log('🆔 Member ID:', admin.memberId);
-    console.log('🔢 Membership:', admin.membershipNumber);
-    console.log('='.repeat(60));
-    console.log('⚠️  IMPORTANT: Changez ce mot de passe après la première connexion!');
-    console.log('='.repeat(60));
-    
+    return true;
   } catch (error) {
-    if (error.code === 11000) {
-      console.log('ℹ️  Admin existe déjà (duplication ignorée)');
-    } else {
-      console.error('❌ Erreur création admin:', error.message);
-      console.error('🔧 Stack:', error.stack);
+    console.error('❌ Erreur connexion MongoDB:', error.message);
+    
+    if (IS_PRODUCTION) {
+      console.log('⏳ Nouvelle tentative dans 5s...');
+      setTimeout(connectToMongoDB, 5000);
     }
+    
+    return false;
   }
 }
 
 // ============ CHARGEMENT DES ROUTES ============
-console.log('\n🛣️  CHARGEMENT DES ROUTES API');
+console.log('\n🛣️  Chargement des routes:');
 
-// Fonction pour charger une route avec gestion d'erreur
-const loadRoute = (routePath, routeName) => {
-  try {
-    const route = require(routePath);
-    console.log(`✅ ${routeName} chargé`);
-    return route;
-  } catch (error) {
-    console.error(`❌ Erreur chargement ${routeName}:`, error.message);
-    
-    // Créer une route de secours
-    const router = require('express').Router();
-    router.all('*', (req, res) => {
-      res.status(503).json({
-        success: false,
-        message: `Service ${routeName} temporairement indisponible`,
-        error: isDevelopment ? error.message : undefined
-      });
-    });
-    
-    return router;
-  }
-};
-
-// Charger toutes les routes
-const authRoutes = loadRoute('./routes/authRoutes', 'authRoutes');
-const memberRoutes = loadRoute('./routes/memberRoutes', 'memberRoutes');
-const adminRoutes = loadRoute('./routes/adminRoutes', 'adminRoutes');
-const postRoutes = loadRoute('./routes/postRoutes', 'postRoutes');
-const profileRoutes = loadRoute('./routes/profileRoutes', 'profileRoutes');
-
-// Monter les routes
-app.use('/api/auth', authRoutes);
-app.use('/api/members', memberRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/posts', postRoutes);
-app.use('/api/profile', profileRoutes);
-
-console.log('✅ Toutes les routes montées');
-
-// ============ ROUTES DE BASE ============
-// Route santé pour vérifier le serveur
-app.get('/api/health', async (req, res) => {
-  try {
-    const dbState = mongoose.connection.readyState;
-    
-    let dbInfo = {
-      status: ['disconnected', 'connected', 'connecting', 'disconnecting'][dbState],
-      state: dbState,
-      name: mongoose.connection.name || 'N/A',
-      host: mongoose.connection.host || 'N/A'
-    };
-    
-    // Statistiques si MongoDB est connecté
-    let stats = {};
-    let adminInfo = null;
-    
-    if (dbState === 1) {
-      try {
-        const Member = require('./models/Member');
-        
-        // Informations admin
-        const admin = await Member.findOne({ email: 'admin@mpb.bj', role: 'admin' })
-          .select('email prenom nom memberId role profileCompleted');
-        
-        if (admin) {
-          adminInfo = admin.toObject();
-        }
-        
-        // Statistiques
-        stats = {
-          members: await Member.countDocuments(),
-          activeMembers: await Member.countDocuments({ isActive: true }),
-          completedProfiles: await Member.countDocuments({ profileCompleted: true }),
-          admins: await Member.countDocuments({ role: 'admin' })
-        };
-        
-      } catch (dbError) {
-        console.log('⚠️  Impossible de récupérer les stats:', dbError.message);
-      }
-    }
-    
+// 1. Chargement des routes AUTH (prioritaire)
+try {
+  const authRoutes = require('./routes/authRoutes');
+  app.use('/api/auth', authRoutes);
+  console.log('   ✅ /api/auth routes chargées');
+  
+  // Route de test directe pour auth
+  app.post('/api/auth/test', (req, res) => {
     res.json({
       success: true,
-      message: 'API MPB - Mouvement Patriotique du Bénin',
+      message: 'Route /api/auth/test fonctionnelle',
       timestamp: new Date().toISOString(),
-      version: '1.0.0',
-      environment: isProduction ? 'production' : 'development',
-      platform: isRender ? 'render' : 'local',
-      server: {
-        port: process.env.PORT || 5000,
-        nodeEnv: process.env.NODE_ENV,
-        uploadsPath: UPLOADS_ROOT,
-        status: 'online',
-        uptime: process.uptime()
-      },
-      database: dbInfo,
-      admin: adminInfo,
-      stats: stats,
-      endpoints: {
-        auth: '/api/auth',
-        members: '/api/members',
-        admin: '/api/admin',
-        posts: '/api/posts',
-        profile: '/api/profile',
-        health: '/api/health'
-      },
-      documentation: `https://${req.get('host')}/api/health`
+      received: req.body
     });
-    
+  });
+} catch (error) {
+  console.error('❌ Erreur chargement authRoutes:', error.message);
+  
+  // Route de secours
+  app.post('/api/auth/login', (req, res) => {
+    console.log('🔐 Route /api/auth/login (secours) appelée');
+    res.json({
+      success: true,
+      message: 'Route de secours - Connexion simulée',
+      token: 'fake-token-secours',
+      member: {
+        _id: 'fake-id',
+        email: req.body.identifier,
+        prenom: 'Test',
+        nom: 'User',
+        role: 'member',
+        profileCompleted: false
+      }
+    });
+  });
+}
+
+// 2. Chargement des autres routes
+const routeModules = [
+  { path: '/api/members', file: 'memberRoutes' },
+  { path: '/api/admin', file: 'adminRoutes' },
+  { path: '/api/posts', file: 'postRoutes' },
+  { path: '/api/profile', file: 'profileRoutes' }
+];
+
+routeModules.forEach(route => {
+  try {
+    if (fs.existsSync(path.join(__dirname, 'routes', `${route.file}.js`))) {
+      const module = require(`./routes/${route.file}`);
+      app.use(route.path, module);
+      console.log(`   ✅ ${route.path} routes chargées`);
+    } else {
+      console.log(`   ⚠️  ${route.file}.js non trouvé`);
+    }
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Erreur serveur',
-      error: isDevelopment ? error.message : undefined,
-      timestamp: new Date().toISOString()
-    });
+    console.error(`❌ Erreur chargement ${route.path}:`, error.message);
   }
+});
+
+// ============ ROUTES DE BASE ============
+
+// Route santé
+app.get('/api/health', (req, res) => {
+  res.json({
+    success: true,
+    message: 'API MPB - Serveur en ligne',
+    timestamp: new Date().toISOString(),
+    environment: IS_PRODUCTION ? 'production' : 'development',
+    version: '1.0.0',
+    endpoints: {
+      auth: '/api/auth/*',
+      members: '/api/members/*',
+      admin: '/api/admin/*',
+      posts: '/api/posts/*',
+      profile: '/api/profile/*'
+    }
+  });
 });
 
 // Route racine
@@ -415,133 +197,251 @@ app.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'Bienvenue sur l\'API du Mouvement Patriotique du Bénin',
-    description: 'Système de gestion des membres et administration',
     version: '1.0.0',
-    environment: isProduction ? 'production' : 'development',
-    timestamp: new Date().toISOString(),
-    endpoints: {
-      health: '/api/health',
-      auth: '/api/auth',
-      members: '/api/members',
-      admin: '/api/admin',
-      posts: '/api/posts',
-      profile: '/api/profile'
-    },
-    documentation: 'Consultez /api/health pour plus d\'informations'
+    documentation: 'http://localhost:5000/api/health',
+    status: 'online'
   });
 });
 
-// Route de test pour vérifier les uploads
-app.get('/api/uploads-test', (req, res) => {
+// ============ ROUTES DE DEBUG ============
+
+// Lister toutes les routes disponibles
+app.get('/api/debug/routes', (req, res) => {
+  const routes = [];
+  
+  function printRoutes(layer, path = '') {
+    if (layer.route) {
+      const routePath = path + layer.route.path;
+      routes.push({
+        path: routePath,
+        methods: Object.keys(layer.route.methods)
+      });
+    } else if (layer.name === 'router' && layer.handle.stack) {
+      const routerPath = layer.regexp.source
+        .replace('\\/', '/')
+        .replace('(?:\\/(?=$))?$', '')
+        .replace(/^\/\^/, '')
+        .replace(/\$\/$/, '')
+        .replace(/\\\//g, '/');
+      
+      layer.handle.stack.forEach(sublayer => {
+        printRoutes(sublayer, path + routerPath);
+      });
+    }
+  }
+  
+  app._router.stack.forEach(layer => {
+    printRoutes(layer);
+  });
+  
   res.json({
     success: true,
-    message: 'Service uploads fonctionnel',
-    uploadsPath: UPLOADS_ROOT,
-    exists: fs.existsSync(UPLOADS_ROOT),
-    directories: fs.readdirSync(UPLOADS_ROOT, { withFileTypes: true })
-      .filter(dirent => dirent.isDirectory())
-      .map(dirent => dirent.name)
+    count: routes.length,
+    routes: routes.sort((a, b) => a.path.localeCompare(b.path))
+  });
+});
+
+// ============ ROUTES DE TEST POUR AUTH ============
+
+// Route de test GET pour auth
+app.get('/api/auth/debug', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Route GET /api/auth/debug fonctionnelle',
+    availableEndpoints: [
+      'POST /api/auth/login',
+      'POST /api/auth/register',
+      'GET /api/auth/verify',
+      'PUT /api/auth/change-password',
+      'POST /api/auth/test (test direct)'
+    ]
+  });
+});
+
+// Route de test POST simple
+app.post('/api/auth/simple-login', (req, res) => {
+  console.log('🧪 Route /api/auth/simple-login appelée');
+  console.log('📥 Données reçues:', req.body);
+  
+  res.json({
+    success: true,
+    message: 'Connexion de test réussie',
+    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5NmFhMjEyZWIxZWQxYmUyMWQ0NWVjNyIsImlhdCI6MTc2ODU5NjgzNCwiZXhwIjoxNzcxMTg4ODM0fQ.z28IzX8rd7j91IpgxXPzZgrDq2nXxsshpcYza8L8vm8',
+    member: {
+      _id: '696aa212eb1ed1be21d45ec7',
+      nom: 'Admin',
+      prenom: 'System',
+      email: 'admin@mpb.bj',
+      role: 'admin',
+      profileCompleted: true,
+      memberId: 'MPB1768595986988NO91QA3ZL'
+    }
   });
 });
 
 // ============ GESTION DES ERREURS ============
+
 // Route 404 pour API
 app.use('/api/*', (req, res) => {
+  console.log(`❌ Route non trouvée: ${req.originalUrl}`);
+  
+  // Lister les routes disponibles qui commencent par /api
+  const availableRoutes = [];
+  function findRoutes(layer, path = '') {
+    if (layer.route) {
+      const routePath = path + layer.route.path;
+      if (routePath.startsWith('/api')) {
+        availableRoutes.push({
+          path: routePath,
+          methods: Object.keys(layer.route.methods)
+        });
+      }
+    } else if (layer.name === 'router' && layer.handle.stack) {
+      const routerPath = layer.regexp.source
+        .replace('\\/', '/')
+        .replace('(?:\\/(?=$))?$', '')
+        .replace(/^\/\^/, '')
+        .replace(/\$\/$/, '')
+        .replace(/\\\//g, '/');
+      
+      layer.handle.stack.forEach(sublayer => {
+        findRoutes(sublayer, path + routerPath);
+      });
+    }
+  }
+  
+  app._router.stack.forEach(layer => {
+    findRoutes(layer);
+  });
+  
   res.status(404).json({
     success: false,
     message: 'Endpoint API non trouvé',
     requestedUrl: req.originalUrl,
-    availableEndpoints: [
-      '/api/health',
-      '/api/auth/login',
-      '/api/auth/register',
-      '/api/auth/verify',
-      '/api/members',
-      '/api/admin',
-      '/api/posts',
-      '/api/profile'
-    ],
-    timestamp: new Date().toISOString()
+    method: req.method,
+    timestamp: new Date().toISOString(),
+    availableEndpoints: availableRoutes
+      .filter(route => route.methods.includes(req.method.toLowerCase()))
+      .map(route => route.path)
+      .slice(0, 10) // Limiter à 10 pour la lisibilité
   });
 });
 
 // Gestionnaire d'erreurs global
 app.use((err, req, res, next) => {
-  console.error('\n🔥 ERREUR SERVEUR:', {
-    message: err.message,
-    stack: err.stack,
-    url: req.url,
-    method: req.method,
-    timestamp: new Date().toISOString()
-  });
+  console.error('🔥 Erreur serveur:', err.message);
+  console.error(err.stack);
   
-  const errorResponse = {
+  res.status(err.status || 500).json({
     success: false,
-    message: err.message || 'Erreur serveur interne',
-    timestamp: new Date().toISOString()
-  };
-  
-  if (isDevelopment) {
-    errorResponse.stack = err.stack;
-    errorResponse.details = err;
-  }
-  
-  res.status(err.status || 500).json(errorResponse);
+    message: 'Erreur serveur',
+    error: IS_DEVELOPMENT ? err.message : 'Erreur interne'
+  });
 });
 
-// ============ DÉMARRAGE DU SERVEUR ============
-async function startServer() {
+// ============ CRÉATION ADMIN PAR DÉFAUT ============
+async function createDefaultAdmin() {
   try {
-    console.log('\n🚀 DÉMARRAGE DU SERVEUR');
-    
-    // 1. Connexion MongoDB
-    console.log('📊 Connexion à la base de données...');
-    const mongoConnected = await connectToMongoDB();
-    
-    if (!mongoConnected) {
-      console.error('❌ Impossible de démarrer sans connexion MongoDB');
-      process.exit(1);
+    if (mongoose.connection.readyState !== 1) {
+      console.log('⏳ MongoDB non connecté, report création admin...');
+      setTimeout(createDefaultAdmin, 3000);
+      return;
     }
     
-    // 2. Créer l'admin après un délai
-    console.log('👑 Initialisation administrateur...');
-    setTimeout(() => {
-      createDefaultAdmin();
-    }, 2000);
+    const Member = require('./models/Member');
     
-    // 3. Démarrer le serveur HTTP
-    const PORT = process.env.PORT || 5000;
-    const HOST = isProduction ? '0.0.0.0' : 'localhost';
+    const existingAdmin = await Member.findOne({ email: 'admin@mpb.bj' });
     
-    app.listen(PORT, HOST, () => {
-      console.log('\n' + '='.repeat(60));
-      console.log('🎉 SERVEUR MPB DÉMARRÉ AVEC SUCCÈS !');
-      console.log('='.repeat(60));
-      console.log(`📡 URL: http://${HOST}:${PORT}`);
-      console.log(`🌍 Environnement: ${isProduction ? 'PRODUCTION' : 'DEVELOPPEMENT'}`);
-      console.log(`🏢 Plateforme: ${isRender ? 'Render' : 'Local'}`);
-      console.log(`📊 MongoDB: ${mongoose.connection.readyState === 1 ? '✅ Connecté' : '❌ Déconnecté'}`);
-      console.log(`📁 Uploads: ${UPLOADS_ROOT}`);
-      console.log('='.repeat(60));
-      console.log('\n🔍 TESTS RAPIDES:');
-      console.log(`   curl http://${HOST}:${PORT}/api/health`);
-      console.log(`   curl -X POST http://${HOST}:${PORT}/api/auth/login -H "Content-Type: application/json" -d '{"identifier":"admin@mpb.bj","password":"AdminMPB2024!","loginType":"email"}'`);
-      console.log('\n⚠️  REMARQUES:');
-      console.log('   • Vérifiez que toutes les variables d\'environnement sont définies');
-      console.log('   • Changez le mot de passe admin après la première connexion');
-      console.log('   • Sauvegardez régulièrement votre base de données');
-      console.log('='.repeat(60));
+    if (existingAdmin) {
+      console.log('👑 Admin existant trouvé:');
+      console.log(`   📧 ${existingAdmin.email}`);
+      console.log(`   👤 ${existingAdmin.prenom} ${existingAdmin.nom}`);
+      console.log(`   🔑 Mot de passe: ${existingAdmin.password ? 'défini' : 'non défini'}`);
+      return;
+    }
+    
+    console.log('👑 Création du compte administrateur...');
+    
+    const admin = new Member({
+      nom: 'Admin',
+      prenom: 'System',
+      email: 'admin@mpb.bj',
+      password: 'AdminMPB2024!',
+      role: 'admin',
+      profileCompleted: true,
+      isActive: true,
+      status: 'Actif'
     });
     
+    await admin.save();
+    
+    console.log('\n' + '='.repeat(50));
+    console.log('✅ ADMINISTRATEUR CRÉÉ AVEC SUCCÈS!');
+    console.log('='.repeat(50));
+    console.log('📧 Email: admin@mpb.bj');
+    console.log('🔑 Mot de passe: AdminMPB2024!');
+    console.log('🆔 Member ID:', admin.memberId);
+    console.log('='.repeat(50));
+    
   } catch (error) {
-    console.error('\n❌ ERREUR CRITIQUE DÉMARRAGE SERVEUR:');
-    console.error('Message:', error.message);
-    console.error('Stack:', error.stack);
-    process.exit(1);
+    console.error('❌ Erreur création admin:', error.message);
   }
 }
 
-// Démarrer le serveur
+// ============ DÉMARRAGE DU SERVEUR ============
+async function startServer() {
+  console.log('\n🚀 Démarrage du serveur...');
+  
+  // Connexion MongoDB
+  const mongoConnected = await connectToMongoDB();
+  
+  if (!mongoConnected && IS_PRODUCTION) {
+    console.error('❌ Impossible de se connecter à MongoDB en production');
+    process.exit(1);
+  }
+  
+  // Création admin
+  if (mongoConnected) {
+    setTimeout(createDefaultAdmin, 1000);
+  }
+  
+  const PORT = process.env.PORT || 5000;
+  const HOST = 'localhost';
+  
+  app.listen(PORT, HOST, () => {
+    console.log('\n' + '='.repeat(60));
+    console.log('🎉 SERVEUR MPB DÉMARRÉ AVEC SUCCÈS!');
+    console.log('='.repeat(60));
+    console.log(`📡 URL: http://${HOST}:${PORT}`);
+    console.log(`🔧 Environnement: ${IS_PRODUCTION ? 'PRODUCTION' : 'DEVELOPPEMENT'}`);
+    console.log(`📊 MongoDB: ${mongoose.connection.readyState === 1 ? '✅ Connecté' : '❌ Déconnecté'}`);
+    
+    console.log('\n🔗 LIENS IMPORTANTS:');
+    console.log(`📈 Santé API: http://${HOST}:${PORT}/api/health`);
+    console.log(`🔍 Debug routes: http://${HOST}:${PORT}/api/debug/routes`);
+    console.log(`🧪 Test auth: http://${HOST}:${PORT}/api/auth/debug`);
+    console.log(`curl http://${HOST}:${PORT}/api/health`);
+    console.log(`curl -X POST http://${HOST}:${PORT}/api/auth/simple-login -H "Content-Type: application/json" -d '{"identifier":"test@test.com","password":"test123"}'`);
+    console.log('='.repeat(60));
+  });
+}
+
+// ============ GESTION DES SIGNNAUX ============
+process.on('SIGINT', () => {
+  console.log('\n\n🛑 Arrêt gracieux du serveur...');
+  mongoose.connection.close();
+  process.exit(0);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('\n❌ Exception non gérée:', error.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('\n❌ Rejet non géré:', reason);
+});
+
+// ============ DÉMARRER ============
 startServer();
 
 module.exports = app;
