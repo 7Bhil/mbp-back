@@ -1,14 +1,13 @@
+// routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 
-// Inscription
-router.post('/register', authController.register);
-
-// Connexion
+// Routes d'authentification
 router.post('/login', authController.login);
-
-// Vérifier token
+router.post('/register', authController.register);
 router.get('/verify', authController.verifyToken);
+router.put('/change-password', authController.changePassword);
+router.post('/logout', authController.logout);
 
 module.exports = router;

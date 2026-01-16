@@ -2,7 +2,7 @@ const Member = require('../models/Member');
 const jwt = require('jsonwebtoken');
 
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+  return jwt.sign({ id }, process.env.JWT_SECRET || 'default_secret_change_me', {
     expiresIn: process.env.JWT_EXPIRE || '30d'
   });
 };
@@ -61,6 +61,7 @@ exports.register = async (req, res) => {
     });
   }
 };
+
 exports.login = async (req, res) => {
   try {
     const { identifier, password, loginType, code_telephone, phoneNumber } = req.body;
@@ -133,9 +134,7 @@ exports.login = async (req, res) => {
     await member.save();
     
     // Générer le token
-    const token = jwt.sign({ id: member._id }, process.env.JWT_SECRET || 'default_secret_change_me', {
-      expiresIn: process.env.JWT_EXPIRE || '30d'
-    });
+    const token = generateToken(member._id);
     
     console.log('✅ Connexion réussie pour:', member.email);
     console.log('🔐 ===== FIN CONNEXION =====\n');
@@ -169,7 +168,7 @@ exports.verifyToken = async (req, res) => {
       });
     }
     
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret_change_me');
     const member = await Member.findById(decoded.id).select('-password');
     
     if (!member) {
@@ -188,6 +187,75 @@ exports.verifyToken = async (req, res) => {
     res.status(401).json({
       success: false,
       message: 'Token invalide',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Changer le mot de passe
+exports.changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'Token manquant'
+      });
+    }
+    
+    // Vérifier le token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret_change_me');
+    const member = await Member.findById(decoded.id);
+    
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        message: 'Membre non trouvé'
+      });
+    }
+    
+    // Vérifier l'ancien mot de passe
+    const isValid = await member.comparePassword(currentPassword);
+    if (!isValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Mot de passe actuel incorrect'
+      });
+    }
+    
+    // Mettre à jour le mot de passe
+    member.password = newPassword;
+    await member.save();
+    
+    res.json({
+      success: true,
+      message: 'Mot de passe changé avec succès'
+    });
+    
+  } catch (error) {
+    console.error('Erreur changement mot de passe:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors du changement de mot de passe',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Déconnexion
+exports.logout = async (req, res) => {
+  try {
+    // Dans une implémentation plus avancée, vous pourriez invalider le token
+    res.json({
+      success: true,
+      message: 'Déconnexion réussie'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la déconnexion',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
