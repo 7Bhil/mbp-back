@@ -19,10 +19,11 @@ console.log(`🏢 Plateforme: ${IS_RENDER ? 'Render' : 'Local'}`);
 console.log(`📅 Date: ${new Date().toLocaleString('fr-FR')}`);
 console.log('=====================================\n');
 
-// ============ CONFIGURATION MONGODB (PRIORITÉ À L'ENVIRONNEMENT) ============
-console.log('🔗 CONFIGURATION MONGODB\n' + '─'.repeat(40));
+// ============ CONFIGURATION MONGODB ============
+console.log('🔗 CONFIGURATION MONGODB');
+console.log('─'.repeat(40));
 
-// URL MONGODB ABSOLUMENT CRITIQUE - LOGIQUE AMÉLIORÉE
+// URL MONGODB - LOGIQUE AMÉLIORÉE
 let MONGODB_URI;
 
 // 1. TOUJOURS vérifier la variable d'environnement d'abord
@@ -40,7 +41,7 @@ if (process.env.MONGODB_URI) {
   console.log('      Valeur: mongodb+srv://USER:PASSWORD@cluster.mongodb.net/mpb_db?retryWrites=true&w=majority');
   console.log('\n⚠️  Utilisation d\'une URL par défaut pour éviter le crash...');
   
-  // URL MongoDB Atlas par défaut (remplacez par la vôtre)
+  // URL MongoDB Atlas par défaut
   MONGODB_URI = 'mongodb+srv://7bhil:lkeURbDG5dci7pk9@cluster0.hcpey4j.mongodb.net/mpb_db?retryWrites=true&w=majority';
 } else {
   // Développement local
@@ -60,26 +61,24 @@ console.log(`🔒 Type: ${MONGODB_URI.includes('mongodb+srv') ? 'MongoDB Atlas (
 const MONGOOSE_OPTIONS = {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-  serverSelectionTimeoutMS: IS_PRODUCTION ? 30000 : 10000, // 30s en prod
+  serverSelectionTimeoutMS: IS_PRODUCTION ? 30000 : 10000,
   connectTimeoutMS: IS_PRODUCTION ? 40000 : 15000,
   socketTimeoutMS: 45000,
   retryWrites: true,
   w: 'majority',
   ...(MONGODB_URI.includes('mongodb+srv') ? {
-    // Options spécifiques à MongoDB Atlas
     ssl: true,
     tlsAllowInvalidCertificates: false,
     tlsAllowInvalidHostnames: false
   } : {
-    // Options spécifiques à MongoDB local
     family: 4
   })
 };
 
-// ============ FONCTION DE CONNEXION MONGODB AVEC RETRY INTELLIGENT ============
+// ============ FONCTION DE CONNEXION MONGODB ============
 async function connectToMongoDB() {
   const MAX_RETRIES = 5;
-  const RETRY_DELAY = 5000; // 5 secondes entre chaque tentative
+  const RETRY_DELAY = 5000;
   
   console.log(`\n🔄 TENTATIVE DE CONNEXION MONGODB (max ${MAX_RETRIES} tentatives)`);
   
@@ -129,7 +128,6 @@ async function connectToMongoDB() {
           console.log('1. Vérifiez votre URI de connexion');
           console.log('2. Vérifiez les accès réseau sur MongoDB Atlas');
           console.log('3. Vérifiez vos identifiants');
-          console.log('4. URL attendue: mongodb+srv://USER:PASSWORD@cluster.mongodb.net/DB_NAME?retryWrites=true&w=majority');
         } else {
           console.log('Problème probable avec MongoDB local:');
           console.log('1. Vérifiez que MongoDB est en cours d\'exécution');
@@ -138,11 +136,6 @@ async function connectToMongoDB() {
           console.log('   - Docker: docker run -d -p 27017:27017 --name mongodb mongo:latest');
         }
         
-        console.log('\n📋 Variables d\'environnement détectées:');
-        console.log(`NODE_ENV: ${process.env.NODE_ENV || 'non défini'}`);
-        console.log(`RENDER: ${process.env.RENDER || 'non défini'}`);
-        console.log(`MONGODB_URI: ${process.env.MONGODB_URI ? 'définie' : 'non définie'}`);
-        
         return false;
       }
     }
@@ -150,7 +143,8 @@ async function connectToMongoDB() {
 }
 
 // ============ CONFIGURATION CORS ============
-console.log('\n🌐 CONFIGURATION CORS\n' + '─'.repeat(40));
+console.log('\n🌐 CONFIGURATION CORS');
+console.log('─'.repeat(40));
 
 const ALLOWED_ORIGINS = IS_DEVELOPMENT
   ? [
@@ -169,7 +163,6 @@ console.log(`Origines autorisées: ${ALLOWED_ORIGINS.join(', ')}`);
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Autoriser les requêtes sans origine (curl, postman, etc.)
     if (!origin) {
       return callback(null, true);
     }
@@ -193,11 +186,12 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // ============ CONFIGURATION UPLOADS ============
-console.log('\n📁 CONFIGURATION UPLOADS\n' + '─'.repeat(40));
+console.log('\n📁 CONFIGURATION UPLOADS');
+console.log('─'.repeat(40));
 
 const UPLOADS_ROOT = IS_RENDER 
-  ? '/opt/render/project/src/uploads'  // Chemin ABSOLU sur Render
-  : path.join(__dirname, 'uploads');   // Chemin RELATIF en local
+  ? '/opt/render/project/src/uploads'
+  : path.join(__dirname, 'uploads');
 
 console.log(`Dossier uploads: ${UPLOADS_ROOT}`);
 console.log(`Existe: ${fs.existsSync(UPLOADS_ROOT) ? '✅ OUI' : '❌ NON'}`);
@@ -231,7 +225,7 @@ createUploadsStructure();
 app.use('/uploads', express.static(UPLOADS_ROOT));
 console.log(`📡 Route statique: /uploads -> ${UPLOADS_ROOT}`);
 
-// ============ ROUTE SANTÉ (DOIT ÊTRE AVANT LES AUTRES ROUTES) ============
+// ============ ROUTE SANTÉ ============
 app.get('/api/health', async (req, res) => {
   try {
     const dbState = mongoose.connection.readyState;
@@ -277,7 +271,8 @@ app.get('/api/health', async (req, res) => {
 // ============ FONCTION CRÉATION ADMIN ============
 async function createDefaultAdmin() {
   try {
-    console.log('\n👑 CRÉATION/VERIFICATION ADMIN\n' + '─'.repeat(40));
+    console.log('\n👑 CRÉATION/VERIFICATION ADMIN');
+    console.log('─'.repeat(40));
     
     // Vérifier que MongoDB est connecté
     if (mongoose.connection.readyState !== 1) {
@@ -326,7 +321,7 @@ async function createDefaultAdmin() {
       motivation: 'Compte administrateur principal du Mouvement Patriotique du Bénin.',
       engagement_valeurs_mpb: true,
       consentement_donnees: true,
-      password: 'admin123', // En clair - sera hashé par middleware
+      password: 'admin123',
       role: 'admin',
       permissions: ['view_members', 'edit_members', 'delete_members', 'create_events', 'manage_settings'],
       status: 'Actif',
@@ -357,7 +352,8 @@ async function createDefaultAdmin() {
 }
 
 // ============ CHARGEMENT DES ROUTES ============
-console.log('\n🛣️  CHARGEMENT DES ROUTES\n' + '─'.repeat(40));
+console.log('\n🛣️  CHARGEMENT DES ROUTES');
+console.log('─'.repeat(40));
 
 const loadRoutes = () => {
   const routes = [
@@ -431,7 +427,8 @@ app.use((err, req, res, next) => {
 // ============ DÉMARRAGE DU SERVEUR ============
 async function startServer() {
   try {
-    console.log('\n🚀 DÉMARRAGE DU SERVEUR\n' + '─'.repeat(40));
+    console.log('\n🚀 DÉMARRAGE DU SERVEUR');
+    console.log('─'.repeat(40));
     
     // 1. Connexion MongoDB
     console.log('Étape 1/3: Connexion à MongoDB...');
@@ -440,7 +437,6 @@ async function startServer() {
     if (!mongoConnected) {
       console.error('❌ Échec critique: Impossible de se connecter à MongoDB');
       
-      // En développement, on peut continuer sans DB
       if (IS_DEVELOPMENT) {
         console.warn('⚠️  Mode développement: Continuation sans MongoDB');
       } else {
@@ -479,7 +475,7 @@ async function startServer() {
       console.log('\n🔗 Liens utiles:');
       console.log(`   ✅ Santé: http://${HOST}:${PORT}/api/health`);
       console.log(`   📚 Documentation: http://${HOST}:${PORT}/`);
-      console.log('\n🛠️  Commande de test:`);
+      console.log('\n🛠️  Commande de test:');
       console.log(`   curl http://${HOST}:${PORT}/api/health`);
     });
     
