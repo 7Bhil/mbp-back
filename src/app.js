@@ -21,8 +21,8 @@ console.log(`🔧 Port: ${PORT}`);
 
 // ============ CORS SIMPLE ============
 app.use(cors({
-  origin: IS_PRODUCTION 
-    ? ['https://mouvementpatriotiquedubenin.netlify.app']
+  origin: IS_PRODUCTION
+    ? ['https://mouvementpatriotiquedubenin.netlify.app', 'https://mbp-back.onrender.com']
     : ['http://localhost:5173', 'http://localhost:5174'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
@@ -39,9 +39,7 @@ app.use((req, res, next) => {
 });
 
 // ============ CONNEXION MONGODB ============
-const MONGODB_URI = IS_PRODUCTION
-  ? process.env.MONGODB_URI || 'mongodb+srv://7bhil:lkeURbDG5dci7pk9@cluster0.hcpey4j.mongodb.net/mpb_db?retryWrites=true&w=majority'
-  : 'mongodb://localhost:27017/mpb_db';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mpb_db';
 
 console.log(`\n🔗 Connexion MongoDB...`);
 
@@ -68,7 +66,7 @@ const routeMapping = {
 
 Object.entries(routeMapping).forEach(([routeFile, routePath]) => {
   const fullPath = path.join(__dirname, 'routes', `${routeFile}.js`);
-  
+
   if (fs.existsSync(fullPath)) {
     try {
       const route = require(fullPath);
@@ -138,7 +136,7 @@ app.get('/api/posts/test', (req, res) => {
 // Route pour voir toutes les routes chargées
 app.get('/api/routes', (req, res) => {
   const routes = [];
-  
+
   app._router.stack.forEach(middleware => {
     if (middleware.route) {
       routes.push({
@@ -156,7 +154,7 @@ app.get('/api/routes', (req, res) => {
       });
     }
   });
-  
+
   res.json({
     success: true,
     routes: routes.filter(r => r.path.startsWith('/api'))
@@ -166,7 +164,7 @@ app.get('/api/routes', (req, res) => {
 // ============ GESTION DES ERREURS ============
 app.use('/api/*', (req, res) => {
   console.log(`❌ Route non trouvée: ${req.method} ${req.originalUrl}`);
-  
+
   // Suggérer les routes disponibles
   const availableRoutes = [];
   app._router.stack.forEach(middleware => {
@@ -174,7 +172,7 @@ app.use('/api/*', (req, res) => {
       availableRoutes.push(middleware.route.path);
     }
   });
-  
+
   res.status(404).json({
     success: false,
     message: 'Endpoint non trouvé',
@@ -201,7 +199,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📍 Local: http://localhost:${PORT}`);
   console.log(`🌍 Réseau: http://0.0.0.0:${PORT}`);
   console.log('='.repeat(50));
-  
+
   console.log('\n🔗 Routes disponibles:');
   console.log(`✅ GET  /api/health`);
   console.log(`✅ POST /api/auth/login`);
