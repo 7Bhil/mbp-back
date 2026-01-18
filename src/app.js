@@ -38,10 +38,15 @@ app.use((req, res, next) => {
   next();
 });
 
+
 // ============ CONNEXION MONGODB ============
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mpb_db';
+const MONGODB_URI = process.env.MONGODB_URI ||
+  (IS_PRODUCTION
+    ? 'mongodb+srv://7bhil:lkeURbDG5dci7pk9@cluster0.hcpey4j.mongodb.net/mpb_db?retryWrites=true&w=majority'
+    : 'mongodb://localhost:27017/mpb_db');
 
 console.log(`\n🔗 Connexion MongoDB...`);
+console.log(`📊 URI: ${MONGODB_URI.includes('mongodb+srv') ? 'MongoDB Atlas (Production)' : 'MongoDB Local'}`);
 
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
