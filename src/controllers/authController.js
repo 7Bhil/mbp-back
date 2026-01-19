@@ -49,7 +49,7 @@ exports.register = async (req, res) => {
     }).then(() => {
       console.log(`✅ Email de confirmation envoyé avec succès à ${memberData.email}`);
     }).catch(err => {
-      console.error(`❌ Échec de l'envoi d'email à ${memberData.email}:`, err.message);
+      console.error(`❌ Échec de l'envoi d'email à ${memberData.email}:`, err);
       // Optionnel: on pourrait ici marquer le membre pour un renvoi ultérieur ou logger plus de détails
     });
 
@@ -310,6 +310,31 @@ exports.logout = async (req, res) => {
       success: false,
       message: 'Erreur lors de la déconnexion',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+// Test direct de l'email
+exports.testEmail = async (req, res) => {
+  try {
+    console.log('🧪 Début test email production...');
+    const info = await sendEmail({
+      email: process.env.SMTP_EMAIL,
+      subject: 'Test Production MPB',
+      message: 'Si vous lisez ceci, la configuration SMTP en production est correcte.'
+    });
+
+    res.json({
+      success: true,
+      message: 'Email de test envoyé avec succès',
+      info: info
+    });
+  } catch (error) {
+    console.error('🔥 Erreur test email production:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Échec de l\'envoi du mail de test',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
