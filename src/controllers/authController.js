@@ -31,7 +31,7 @@ exports.register = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Envoyer l'email
+    // Envoyer l'email en arrière-plan (non-bloquant)
     const verifyUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/verify-email/${verificationToken}`;
 
     const htmlMessage = `
@@ -41,21 +41,23 @@ exports.register = async (req, res) => {
       <p>Si le bouton ne fonctionne pas, copiez ce lien : ${verifyUrl}</p>
     `;
 
-    try {
-      await sendEmail({
-        email: memberData.email,
-        subject: 'Confirmation d\'inscription - MPB',
-        html: htmlMessage
-      });
+    // Lancement de l'envoi d'email sans attendre (await) la réponse
+    sendEmail({
+      email: memberData.email,
+      subject: 'Confirmation d\'inscription - MPB',
+      html: htmlMessage
+    }).then(() => {
+      console.log(`✅ Email de confirmation envoyé avec succès à ${memberData.email}`);
+    }).catch(err => {
+      console.error(`❌ Échec de l'envoi d'email à ${memberData.email}:`, err.message);
+      // Optionnel: on pourrait ici marquer le membre pour un renvoi ultérieur ou logger plus de détails
+    });
 
-      return res.status(200).json({
-        success: true,
-        message: 'Email de confirmation envoyé'
-      });
-    } catch (err) {
-      console.error('Erreur envoi email:', err);
-      return res.status(500).json({ success: false, message: 'Erreur lors de l\'envoi de l\'email' });
-    }
+    // Réponse immédiate au client
+    return res.status(200).json({
+      success: true,
+      message: 'Inscription reçue. Un email de confirmation vous a été envoyé.'
+    });
 
   } catch (error) {
     console.error('Erreur inscription:', error);
