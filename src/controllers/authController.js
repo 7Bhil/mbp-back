@@ -339,7 +339,7 @@ exports.testEmail = async (req, res) => {
         has_email: !!process.env.SMTP_EMAIL,
         has_password: !!process.env.SMTP_PASSWORD,
         email_used: process.env.SMTP_EMAIL,
-        version: "v4-port465-secure"
+        version: "v5-service-gmail-debug"
       }
     });
   }
