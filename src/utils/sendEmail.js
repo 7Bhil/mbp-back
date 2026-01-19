@@ -2,6 +2,7 @@ const nodemailer = require('nodemailer');
 
 const sendEmail = async (options) => {
     try {
+        console.log(`📧 Tentative d'envoi d'email via service: gmail (${process.env.SMTP_EMAIL ? process.env.SMTP_EMAIL.substring(0, 3) + '...' : 'NON DEFINI'})`);
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
@@ -11,7 +12,7 @@ const sendEmail = async (options) => {
         });
 
         const message = {
-            from: `${process.env.FROM_NAME} <${process.env.SMTP_EMAIL}>`,
+            from: `${process.env.FROM_NAME || 'MPB'} <${process.env.SMTP_EMAIL}>`,
             to: options.email,
             subject: options.subject,
             text: options.message,

@@ -334,7 +334,12 @@ exports.testEmail = async (req, res) => {
       success: false,
       message: 'Échec de l\'envoi du mail de test',
       error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      stack: error.stack,
+      config_status: {
+        has_email: !!process.env.SMTP_EMAIL,
+        has_password: !!process.env.SMTP_PASSWORD,
+        email_used: process.env.SMTP_EMAIL
+      }
     });
   }
 };
