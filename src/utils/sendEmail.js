@@ -7,7 +7,7 @@ const sendEmail = async (options) => {
         const data = {
             sender: {
                 name: process.env.FROM_NAME || "Mouvement Patriotique du Bénin",
-                email: process.env.SMTP_EMAIL || "louerleternel123@gmail.com"
+                email: "louerleternel123@gmail.com" // Utilisez TOUJOURS un email vérifié ici
             },
             to: [{ email: options.email }],
             subject: options.subject,
