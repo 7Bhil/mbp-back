@@ -7,7 +7,7 @@ const sendEmail = async (options) => {
         const data = {
             sender: {
                 name: process.env.FROM_NAME || "Mouvement Patriotique du Bénin",
-                email: "louerleternel123@gmail.com" // Email validé sur Brevo
+                email: process.env.SMTP_EMAIL || "louerleternel123@gmail.com"
             },
             to: [{ email: options.email }],
             subject: options.subject,
