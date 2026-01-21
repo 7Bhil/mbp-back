@@ -4,10 +4,14 @@ const sendEmail = async (options) => {
     try {
         console.log(`📧 Tentative d'envoi d'email via API Brevo (${options.email})`);
 
+        const senderEmail = (process.env.SMTP_EMAIL && process.env.SMTP_EMAIL.includes('@') && !process.env.SMTP_EMAIL.includes('brevo.com'))
+            ? process.env.SMTP_EMAIL
+            : "louerleternel123@gmail.com";
+
         const data = {
             sender: {
                 name: process.env.FROM_NAME || "Mouvement Patriotique du Bénin",
-                email: "louerleternel123@gmail.com" // Utilisez TOUJOURS un email vérifié ici
+                email: senderEmail
             },
             to: [{ email: options.email }],
             subject: options.subject,

@@ -316,11 +316,12 @@ exports.logout = async (req, res) => {
 // Test direct de l'email
 exports.testEmail = async (req, res) => {
   try {
-    console.log('🧪 Début test email production...');
+    const targetEmail = req.query.email || process.env.SMTP_EMAIL;
+    console.log(`🧪 Début test email production vers ${targetEmail}...`);
     const info = await sendEmail({
-      email: process.env.SMTP_EMAIL,
-      subject: 'Test Production MPB',
-      message: 'Si vous lisez ceci, la configuration SMTP en production est correcte.'
+      email: targetEmail,
+      subject: 'Test Production MPB - v11',
+      message: 'Si vous lisez ceci, l\'envoi via API HTTP Brevo fonctionne parfaitement pour cette adresse.'
     });
 
     res.json({
@@ -339,7 +340,7 @@ exports.testEmail = async (req, res) => {
         has_email: !!process.env.SMTP_EMAIL,
         has_password: !!process.env.SMTP_PASSWORD,
         email_used: process.env.SMTP_EMAIL,
-        version: "v10-brevo-api-http"
+        version: "v11-brevo-api-dynamic-test"
       }
     });
   }
