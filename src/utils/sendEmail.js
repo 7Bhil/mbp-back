@@ -5,14 +5,12 @@ const sendEmail = async (options) => {
         console.log(`📧 Tentative d'envoi d'email via service: Brevo (${process.env.SMTP_EMAIL ? process.env.SMTP_EMAIL.substring(0, 3) + '...' : 'NON DEFINI'})`);
         const transporter = nodemailer.createTransport({
             host: 'smtp-relay.brevo.com',
-            port: 587,
-            secure: false, // true pour le port 465, false pour 587
+            port: 465,
+            secure: true, // true pour le port 465
             auth: {
                 user: process.env.SMTP_EMAIL,
                 pass: process.env.SMTP_PASSWORD,
-            },
-            debug: true,
-            logger: true
+            }
         });
 
         const message = {

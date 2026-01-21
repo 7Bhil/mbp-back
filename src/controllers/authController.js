@@ -339,7 +339,7 @@ exports.testEmail = async (req, res) => {
         has_email: !!process.env.SMTP_EMAIL,
         has_password: !!process.env.SMTP_PASSWORD,
         email_used: process.env.SMTP_EMAIL,
-        version: "v8-brevo-migration"
+        version: "v9-brevo-port465"
       }
     });
   }
