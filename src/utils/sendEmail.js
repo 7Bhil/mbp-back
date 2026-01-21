@@ -4,13 +4,18 @@ const sendEmail = async (options) => {
     try {
         console.log(`📧 Tentative d'envoi d'email via service: gmail (${process.env.SMTP_EMAIL ? process.env.SMTP_EMAIL.substring(0, 3) + '...' : 'NON DEFINI'})`);
         const transporter = nodemailer.createTransport({
-            service: 'gmail',
+            host: 'smtp.gmail.com',
+            port: 587,
+            secure: false, // true pour le port 465, false pour 587
             auth: {
                 user: process.env.SMTP_EMAIL,
                 pass: process.env.SMTP_PASSWORD,
             },
-            debug: true, // Voir le détail dans les logs Render
-            logger: true // Loguer l'activité SMTP
+            tls: {
+                rejectUnauthorized: false
+            },
+            debug: true,
+            logger: true
         });
 
         const message = {
