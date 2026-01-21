@@ -2,22 +2,15 @@ const nodemailer = require('nodemailer');
 
 const sendEmail = async (options) => {
     try {
-        console.log(`📧 Tentative d'envoi d'email via service: gmail (${process.env.SMTP_EMAIL ? process.env.SMTP_EMAIL.substring(0, 3) + '...' : 'NON DEFINI'})`);
+        console.log(`📧 Tentative d'envoi d'email via service: Brevo (${process.env.SMTP_EMAIL ? process.env.SMTP_EMAIL.substring(0, 3) + '...' : 'NON DEFINI'})`);
         const transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
+            host: 'smtp-relay.brevo.com',
             port: 587,
-            secure: false,
+            secure: false, // true pour le port 465, false pour 587
             auth: {
                 user: process.env.SMTP_EMAIL,
                 pass: process.env.SMTP_PASSWORD,
             },
-            tls: {
-                rejectUnauthorized: false,
-                servername: 'smtp.gmail.com'
-            },
-            family: 4, // Force IPv4
-            connectionTimeout: 30000, // 30 secondes
-            greetingTimeout: 30000,
             debug: true,
             logger: true
         });
