@@ -7,15 +7,58 @@ exports.getDashboardStats = async (req, res) => {
     const activeMembers = await Member.countDocuments({ isActive: true });
     const admins = await Member.countDocuments({ role: 'admin' });
     const completedProfiles = await Member.countDocuments({ profileCompleted: true });
-    
+
     // Inscriptions récentes (7 derniers jours)
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    
+
     const recentRegistrations = await Member.countDocuments({
       dateInscription: { $gte: oneWeekAgo }
     });
-    
+
+    // Taux d'inscription ce mois (vs mois dernier)
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const firstDayOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    const thisMonthCount = await Member.countDocuments({
+      dateInscription: { $gte: firstDayOfMonth }
+    });
+    const lastMonthCount = await Member.countDocuments({
+      dateInscription: { $gte: firstDayOfLastMonth, $lt: firstDayOfMonth }
+    });
+
+    const registrationRate = lastMonthCount > 0
+      ? Math.round((thisMonthCount / lastMonthCount) * 100)
+      : 100;
+
+    // Distribution par département (Top 3)
+    const departmentStats = await Member.aggregate([
+      { $match: { departement: { $exists: true, $ne: null, $ne: '' } } },
+      { $group: { _id: '$departement', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 3 }
+    ]);
+
+    const departmentDistribution = departmentStats.map(d => ({
+      name: d._id,
+      count: d.count,
+      percentage: Math.round((d.count / totalMembers) * 100)
+    }));
+
+    // Dernières activités (inscriptions récentes)
+    const recentMembers = await Member.find()
+      .sort({ dateInscription: -1 })
+      .limit(3)
+      .select('nom prenom dateInscription email');
+
+    const recentActivities = recentMembers.map(m => ({
+      type: 'inscription',
+      member: `${m.prenom} ${m.nom}`,
+      email: m.email,
+      date: m.dateInscription
+    }));
+
     // Distribution par âge
     const ageDistribution = await Member.aggregate([
       {
@@ -29,7 +72,7 @@ exports.getDashboardStats = async (req, res) => {
         }
       }
     ]);
-    
+
     res.json({
       success: true,
       stats: {
@@ -40,10 +83,13 @@ exports.getDashboardStats = async (req, res) => {
         completedProfiles,
         incompleteProfiles: totalMembers - completedProfiles,
         recentRegistrations,
+        registrationRate,
+        departmentDistribution,
+        recentActivities,
         ageDistribution
       }
     });
-    
+
   } catch (error) {
     console.error('Erreur stats:', error);
     res.status(500).json({
@@ -59,12 +105,12 @@ exports.getAllMembers = async (req, res) => {
     const members = await Member.find()
       .select('-password')
       .sort('-dateInscription');
-    
+
     res.json({
       success: true,
       members
     });
-    
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -77,19 +123,19 @@ exports.getAllMembers = async (req, res) => {
 exports.getMemberById = async (req, res) => {
   try {
     const member = await Member.findById(req.params.id).select('-password');
-    
+
     if (!member) {
       return res.status(404).json({
         success: false,
         message: 'Membre non trouvé'
       });
     }
-    
+
     res.json({
       success: true,
       member
     });
-    
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -103,25 +149,25 @@ exports.updateMember = async (req, res) => {
   try {
     const updates = req.body;
     const memberId = req.params.id;
-    
+
     // Empêcher la modification de certains champs
     delete updates.email;
     delete updates.password;
     delete updates.memberId;
     delete updates.dateInscription;
-    
+
     const member = await Member.findByIdAndUpdate(
       memberId,
       { $set: updates },
       { new: true, runValidators: true }
     ).select('-password');
-    
+
     res.json({
       success: true,
       message: 'Membre mis à jour',
       member
     });
-    
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -134,14 +180,14 @@ exports.updateMember = async (req, res) => {
 exports.toggleMemberStatus = async (req, res) => {
   try {
     const member = await Member.findById(req.params.id);
-    
+
     if (!member) {
       return res.status(404).json({
         success: false,
         message: 'Membre non trouvé'
       });
     }
-    
+
     // Ne pas permettre de désactiver un autre admin (sauf si c'est soi-même)
     if (member.role === 'admin' && member._id.toString() !== req.memberId) {
       return res.status(403).json({
@@ -149,11 +195,11 @@ exports.toggleMemberStatus = async (req, res) => {
         message: 'Vous ne pouvez pas désactiver un autre administrateur'
       });
     }
-    
+
     member.isActive = !member.isActive;
     member.status = member.isActive ? 'Actif' : 'Inactif';
     await member.save();
-    
+
     res.json({
       success: true,
       message: member.isActive ? 'Membre activé' : 'Membre désactivé',
@@ -163,7 +209,7 @@ exports.toggleMemberStatus = async (req, res) => {
         status: member.status
       }
     });
-    
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -176,17 +222,17 @@ exports.toggleMemberStatus = async (req, res) => {
 exports.promoteToAdmin = async (req, res) => {
   try {
     const member = await Member.findById(req.params.id);
-    
+
     if (!member) {
       return res.status(404).json({
         success: false,
         message: 'Membre non trouvé'
       });
     }
-    
+
     member.role = 'admin';
     await member.save();
-    
+
     res.json({
       success: true,
       message: 'Membre promu administrateur',
@@ -198,7 +244,7 @@ exports.promoteToAdmin = async (req, res) => {
         role: member.role
       }
     });
-    
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -211,7 +257,7 @@ exports.promoteToAdmin = async (req, res) => {
 exports.searchMembers = async (req, res) => {
   try {
     const query = req.params.query;
-    
+
     const members = await Member.find({
       $or: [
         { nom: { $regex: query, $options: 'i' } },
@@ -222,14 +268,14 @@ exports.searchMembers = async (req, res) => {
         { ville: { $regex: query, $options: 'i' } }
       ]
     })
-    .select('nom prenom email role departement commune ville age memberId profileCompleted isActive dateInscription')
-    .limit(20);
-    
+      .select('nom prenom email role departement commune ville age memberId profileCompleted isActive dateInscription')
+      .limit(20);
+
     res.json({
       success: true,
       members
     });
-    
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -245,13 +291,13 @@ exports.getIncompleteProfiles = async (req, res) => {
       .select('nom prenom email age memberId profileCompleted dateInscription')
       .sort('-dateInscription')
       .limit(50);
-    
+
     res.json({
       success: true,
       count: members.length,
       members
     });
-    
+
   } catch (error) {
     res.status(500).json({
       success: false,
