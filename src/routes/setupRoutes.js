@@ -3,22 +3,39 @@ const router = express.Router();
 const Member = require('../models/Member');
 
 // URL SECRÈTE POUR INITIALISER LE SUPER ADMIN
-// À utiliser une seule fois après le déploiement
+// Utiliser ?force=true pour forcer la suppression et recréation
 router.get('/init-super-admin', async (req, res) => {
     try {
         const superAdminEmail = 'superadmin@mpb.com';
-        const superAdminPassword = 'superadmin123456'; // Sera hashé par le modèle
+        const superAdminPassword = 'superadmin123456';
+        const forceRecreate = req.query.force === 'true';
 
         // Vérifier si existe déjà
         const existing = await Member.findOne({ email: superAdminEmail });
 
         if (existing) {
-            if (existing.role !== 'super_admin') {
-                existing.role = 'super_admin';
-                await existing.save();
-                return res.json({ success: true, message: 'Compte existant mis à jour en Super Admin.' });
+            if (forceRecreate) {
+                console.log(`🗑️ Suppression de l'ancien compte ${existing.email} (ID: ${existing._id}) pour recréation propre...`);
+                await Member.deleteOne({ _id: existing._id }); // Suppression par ID plus sûre
+            } else {
+                // Mise à jour simple du rôle si nécessaire
+                let updated = false;
+                if (existing.role !== 'super_admin') {
+                    existing.role = 'super_admin';
+                    updated = true;
+                }
+
+                if (updated) {
+                    await existing.save();
+                    return res.json({ success: true, message: 'Compte existant mis à jour en Super Admin (Rôle corrigé).' });
+                }
+
+                return res.json({
+                    success: true,
+                    message: 'Le Super Admin existe déjà. Le mot de passe n\'a pas été changé.',
+                    hint: 'Ajoutez ?force=true à l\'URL pour supprimer et recréer ce compte à zéro (reset mot de passe).'
+                });
             }
-            return res.json({ success: true, message: 'Le Super Admin existe déjà.' });
         }
 
         // Création
@@ -50,7 +67,9 @@ router.get('/init-super-admin', async (req, res) => {
 
         res.json({
             success: true,
-            message: '✅ Super Admin créé avec succès !',
+            message: forceRecreate
+                ? '✅ Ancien compte supprimé et Super Admin RECRÉÉ avec succès !'
+                : '✅ Super Admin créé avec succès !',
             credentials: {
                 email: superAdminEmail,
                 password: 'superadmin123456'
