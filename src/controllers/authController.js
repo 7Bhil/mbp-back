@@ -15,48 +15,29 @@ exports.register = async (req, res) => {
   try {
     const memberData = req.body;
 
-    // Vérifier si l'email existe déjà dans Member
+    // Vérifier si l'email existe déjà
     const existingMember = await Member.findOne({ email: memberData.email });
     if (existingMember) {
       return res.status(400).json({ success: false, message: 'Cet email est déjà utilisé' });
     }
 
-    // Créer un token de vérification
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-
-    // Stocker dans PendingMember (le mot de passe sera haché par le modèle Member lors du transfert final)
-    await PendingMember.findOneAndUpdate(
-      { email: memberData.email },
-      { ...memberData, verificationToken },
-      { upsert: true, new: true }
-    );
-
-    // Envoyer l'email en arrière-plan (non-bloquant)
-    const verifyUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/verify-email/${verificationToken}`;
-
-    const htmlMessage = `
-      <h1>Bienvenue au MPB !</h1>
-      <p>Veuillez confirmer votre email en cliquant sur le lien ci-dessous :</p>
-      <a href="${verifyUrl}" style="background:#003366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Confirmer mon inscription</a>
-      <p>Si le bouton ne fonctionne pas, copiez ce lien : ${verifyUrl}</p>
-    `;
-
-    // Lancement de l'envoi d'email sans attendre (await) la réponse
-    sendEmail({
-      email: memberData.email,
-      subject: 'Confirmation d\'inscription - MPB',
-      html: htmlMessage
-    }).then(() => {
-      console.log(`✅ Email de confirmation envoyé avec succès à ${memberData.email}`);
-    }).catch(err => {
-      console.error(`❌ Échec de l'envoi d'email à ${memberData.email}:`, err);
-      // Optionnel: on pourrait ici marquer le membre pour un renvoi ultérieur ou logger plus de détails
+    // ⚠️ EMAIL VERIFICATION TEMPORAIREMENT DÉSACTIVÉE
+    // Créer directement le membre comme vérifié
+    const member = new Member({
+      ...memberData,
+      isVerified: true,
+      status: 'Actif'
     });
 
-    // Réponse immédiate au client
+    await member.save();
+
+    // ⚠️ L'envoi d'email est désactivé - à réactiver plus tard
+    // const verifyUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/verify-email/${verificationToken}`;
+    // await sendEmail({ email: memberData.email, subject: 'Confirmation...', html: htmlMessage });
+
     return res.status(200).json({
       success: true,
-      message: 'Inscription reçue. Un email de confirmation vous a été envoyé.'
+      message: 'Inscription réussie ! Vous pouvez maintenant vous connecter.'
     });
 
   } catch (error) {
