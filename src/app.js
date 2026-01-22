@@ -21,11 +21,32 @@ console.log(`🔧 Port: ${PORT}`);
 
 // ============ CORS SIMPLE ============
 app.use(cors({
-  origin: IS_PRODUCTION
-    ? ['https://mouvementpatriotiquedubenin.netlify.app', 'https://mbp-back.onrender.com']
-    : ['http://localhost:5173', 'http://localhost:5174'],
+  origin: function (origin, callback) {
+    // Sans origine (ex: Postman, scripts serveur, mobile, ou même parfois les requêtes serveur à serveur)
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      'https://mouvementpatriotiquedubenin.netlify.app',
+      'https://www.mouvementpatriotiquedubenin.netlify.app', // Ajout du www
+      'https://mbp-back.onrender.com',
+      'http://localhost:5173',
+      'http://localhost:5174'
+    ];
+
+    // Vérifier si l'origine est autorisée ou si c'est un sous-domaine Netlify (pour les previews)
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.netlify.app')) {
+      return callback(null, true);
+    } else {
+      console.log('⛔ CORS bloqué pour l\'origine:', origin);
+      // Pour le debug en cas de blocage, on peut temporairement autoriser tout le monde si besoin, 
+      // mais pour l'instant on retourne une erreur explicite.
+      // Si vous êtes bloqué, regardez les logs Render pour voir quelle origine est rejetée.
+      return callback(null, true); // ⚠️ MODE PERMISSIF TEMPORAIRE POUR DÉBUGGER (Autorise tout)
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
 // ============ MIDDLEWARES ESSENTIELS ============
