@@ -65,7 +65,8 @@ const routeMapping = {
   'authRoutes': '/api/auth',
   'memberRoutes': '/api/members',
   'adminRoutes': '/api/admin',
-  'superAdminRoutes': '/api/super-admin', // 🛡️ Nouvelle route Super Admin
+  'superAdminRoutes': '/api/super-admin',
+  'setupRoutes': '/api/setup', // 🛠️ Route d'initialisation
   'postRoutes': '/api/posts',
   'profileRoutes': '/api/profile'
 };
