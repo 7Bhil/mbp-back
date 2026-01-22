@@ -6,7 +6,7 @@ const sendEmail = async (options) => {
 
         const senderEmail = (process.env.SMTP_EMAIL && process.env.SMTP_EMAIL.includes('@') && !process.env.SMTP_EMAIL.includes('brevo.com'))
             ? process.env.SMTP_EMAIL
-            : "louerleternel123@gmail.com";
+            : "mouvementpatriotique229@outlook.com";
 
         const data = {
             sender: {
