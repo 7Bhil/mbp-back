@@ -63,9 +63,10 @@ console.log('\n🛣️  Chargement des routes...');
 // Mapping spécifique pour vos routes
 const routeMapping = {
   'authRoutes': '/api/auth',
-  'memberRoutes': '/api/members',      // ← CORRIGÉ: /api/members (pas /api/member)
+  'memberRoutes': '/api/members',
   'adminRoutes': '/api/admin',
-  'postRoutes': '/api/posts',          // ← CORRIGÉ: /api/posts (pas /api/post)
+  'superAdminRoutes': '/api/super-admin', // 🛡️ Nouvelle route Super Admin
+  'postRoutes': '/api/posts',
   'profileRoutes': '/api/profile'
 };
 
