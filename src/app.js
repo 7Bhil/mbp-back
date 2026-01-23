@@ -106,7 +106,15 @@ app.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'API Mouvement Patriotique du Bénin',
-    version: '1.0.0',
+    version: '1.0.0'
+  });
+});
+
+// Route info API (évite les 404 sur /api/)
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    message: 'MPB API Root',
     endpoints: {
       health: 'GET /api/health',
       login: 'POST /api/auth/login',
