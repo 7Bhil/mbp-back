@@ -24,4 +24,7 @@ router.get('/members/search/:query', adminController.searchMembers);
 // Nouvelle route : Profils incomplets
 router.get('/incomplete-profiles', adminController.getIncompleteProfiles);
 
+// Suppression définitive
+router.delete('/members/:id', adminController.deleteMember);
+
 module.exports = router;

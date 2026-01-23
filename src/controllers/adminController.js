@@ -305,3 +305,51 @@ exports.getIncompleteProfiles = async (req, res) => {
     });
   }
 };
+
+// Supprimer définitivement un membre
+exports.deleteMember = async (req, res) => {
+  try {
+    const memberId = req.params.id;
+    const member = await Member.findById(memberId);
+
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        message: 'Membre non trouvé'
+      });
+    }
+
+    // Protection : Empêcher la suppression de soi-même
+    if (member._id.toString() === req.memberId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Vous ne pouvez pas supprimer votre propre compte administrateur'
+      });
+    }
+
+    // Protection supplémentaire : Empêcher la suppression d'autres admins (optionnel, mais recommandé)
+    // Si on veut permettre aux Super Admins de supprimer des admins, il faudrait une logique de rôle plus complexe
+    // Ici on empêche simplement un admin de supprimer un autre admin
+    if (member.role === 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Impossible de supprimer un administrateur. Veuillez le rétrograder d\'abord.'
+      });
+    }
+
+    await Member.findByIdAndDelete(memberId);
+
+    res.json({
+      success: true,
+      message: 'Membre supprimé définitivement',
+      deletedId: memberId
+    });
+
+  } catch (error) {
+    console.error('Erreur suppression membre:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur lors de la suppression'
+    });
+  }
+};

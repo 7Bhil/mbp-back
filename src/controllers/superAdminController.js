@@ -7,10 +7,14 @@ exports.getSystemStats = async (req, res) => {
         const adminCount = await Member.countDocuments({ role: 'admin' });
         const superAdminCount = await Member.countDocuments({ role: 'super_admin' });
         const memberCount = await Member.countDocuments({ role: 'member' });
+        const completedProfiles = await Member.countDocuments({ profileCompleted: true });
 
         // Stats d'activité récentes
         const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        const newRegistrations24h = await Member.countDocuments({ dateInscription: { $gte: last24h } });
+        const last7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+        const newRegistrations24h = await Member.countDocuments({ createdAt: { $gte: last24h } });
+        const newRegistrations7d = await Member.countDocuments({ createdAt: { $gte: last7d } });
 
         res.json({
             success: true,
@@ -21,12 +25,19 @@ exports.getSystemStats = async (req, res) => {
                     admins: adminCount,
                     members: memberCount
                 },
+                quality: {
+                    completedProfiles,
+                    completionRate: totalMembers > 0 ? Math.round((completedProfiles / totalMembers) * 100) : 0
+                },
                 activity: {
-                    registrationsLast24h: newRegistrations24h
+                    registrationsLast24h: newRegistrations24h,
+                    registrationsLast7d: newRegistrations7d,
+                    growthRate: totalMembers > newRegistrations7d ? Math.round((newRegistrations7d / (totalMembers - newRegistrations7d)) * 100) : 0
                 }
             }
         });
     } catch (error) {
+        console.error('Stats Error:', error);
         res.status(500).json({ success: false, message: 'Erreur serveur stats' });
     }
 };
