@@ -5,10 +5,13 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
+const passport = require('passport');
+require('./config/passport'); // Importer la configuration passport
 
 const app = express();
 
 // ============ CONFIGURATION DE BASE ============
+app.use(passport.initialize());
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const PORT = process.env.PORT || 5000;
 
@@ -69,7 +72,8 @@ const routeMapping = {
   'setupRoutes': '/api/setup',
   'postRoutes': '/api/posts',
   'profileRoutes': '/api/profile',
-  'reportRoutes': '/api/reports' // 📊 Nouveau module Rapports
+  'reportRoutes': '/api/reports',
+  'contactRoutes': '/api/contact'
 };
 
 Object.entries(routeMapping).forEach(([routeFile, routePath]) => {

@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const sendEmail = require('../utils/sendEmail');
 const bcrypt = require('bcryptjs');
+const passport = require('passport');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || 'default_secret_change_me', {
@@ -324,5 +325,22 @@ exports.testEmail = async (req, res) => {
         version: "v11-brevo-api-dynamic-test"
       }
     });
+  }
+};
+
+/**
+ * @desc    Callback Google OAuth
+ */
+exports.googleCallback = (req, res) => {
+  try {
+    const token = generateToken(req.user._id);
+    const member = req.user.toJSON();
+
+    // Redirection vers le frontend avec le token
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    res.redirect(`${clientUrl}/login?token=${token}&member=${encodeURIComponent(JSON.stringify(member))}`);
+  } catch (error) {
+    console.error('Erreur callback Google:', error);
+    res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/login?error=auth_failed`);
   }
 };

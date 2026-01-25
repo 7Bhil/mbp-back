@@ -1,35 +1,33 @@
-const axios = require('axios');
+const nodemailer = require('nodemailer');
 
 const sendEmail = async (options) => {
     try {
-        console.log(`📧 Tentative d'envoi d'email via API Brevo (${options.email})`);
+        console.log(`📧 Tentative d'envoi d'email via Gmail SMTP (${options.email})`);
 
-        const senderEmail = (process.env.SMTP_EMAIL && process.env.SMTP_EMAIL.includes('@') && !process.env.SMTP_EMAIL.includes('brevo.com'))
-            ? process.env.SMTP_EMAIL
-            : "mouvementpatriotique229@outlook.com";
-
-        const data = {
-            sender: {
-                name: process.env.FROM_NAME || "Mouvement Patriotique du Bénin",
-                email: senderEmail
-            },
-            to: [{ email: options.email }],
-            subject: options.subject,
-            htmlContent: options.html || options.message
-        };
-
-        const response = await axios.post('https://api.brevo.com/v3/smtp/email', data, {
-            headers: {
-                'accept': 'application/json',
-                'api-key': process.env.SMTP_PASSWORD, // On utilise la clé API stockée dans SMTP_PASSWORD
-                'content-type': 'application/json'
+        const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST || 'smtp.gmail.com',
+            port: process.env.SMTP_PORT || 465,
+            secure: true, // true pour le port 465, false pour les autres
+            auth: {
+                user: process.env.SMTP_EMAIL,
+                pass: process.env.SMTP_PASSWORD
             }
         });
 
-        console.log('✅ Email envoyé via API (ID: %s)', response.data.messageId);
-        return response.data;
+        const mailOptions = {
+            from: `"${process.env.FROM_NAME || 'Mouvement Patriotique du Bénin'}" <${process.env.SMTP_EMAIL}>`,
+            to: options.email,
+            subject: options.subject,
+            html: options.html || options.message,
+            text: options.message // Version texte brut si nécessaire
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+
+        console.log('✅ Email envoyé via SMTP Gmail (ID: %s)', info.messageId);
+        return info;
     } catch (error) {
-        console.error('❌ Erreur d\'envoi d\'email API:', error.response ? error.response.data : error.message);
+        console.error('❌ Erreur d\'envoi d\'email SMTP Gmail:', error.message);
         throw error;
     }
 };

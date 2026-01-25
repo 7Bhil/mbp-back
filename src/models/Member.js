@@ -21,7 +21,7 @@ const memberSchema = new mongoose.Schema({
     trim: true,
     match: [/^\S+@\S+\.\S+$/, 'Email invalide']
   },
-  
+
   // === ÂGE (direct, pas birthYear) ===
   age: {
     type: Number,
@@ -29,13 +29,13 @@ const memberSchema = new mongoose.Schema({
     min: [16, 'Vous devez avoir au moins 16 ans'],
     max: [100, 'Âge maximum 100 ans']
   },
-  
+
   // === CONTACT ===
   code_telephone: {
     type: String,
     default: '+229',
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return /^\+\d{1,4}$/.test(v);
       },
       message: 'Code pays invalide'
@@ -46,7 +46,7 @@ const memberSchema = new mongoose.Schema({
     required: [true, 'Le téléphone est requis'],
     trim: true
   },
-  
+
   // === LOCALISATION (1ère partie - formulaire initial) ===
   pays: {
     type: String,
@@ -55,15 +55,15 @@ const memberSchema = new mongoose.Schema({
   },
   departement: {
     type: String,
-    required: function() {
-      return this.pays === 'Bénin';
+    required: function () {
+      return this.pays === 'Bénin' && !this.googleId;
     }
   },
   commune: {
     type: String,
-    required: [true, 'La commune est requise']
+    required: function () { return !this.googleId; }
   },
-  
+
   // === LOCALISATION (à remplir après connexion) ===
   ville: {
     type: String,
@@ -81,21 +81,21 @@ const memberSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  
+
   // === PROFESSION ===
   profession: {
     type: String,
-    required: [true, 'La profession est requise'],
+    required: function () { return !this.googleId; },
     enum: [
       'Étudiant', 'Employé', 'Fonctionnaire', 'Entrepreneur', 'Commerçant',
       'Agriculteur', 'Artisan', 'Profession libérale', 'Retraité', 'Sans emploi', 'Autre'
     ]
   },
-  
+
   // === ENGAGEMENT ===
   disponibilite: {
     type: String,
-    required: [true, 'La disponibilité est requise'],
+    required: function () { return !this.googleId; }, // Requis si pas Google Auth
     enum: [
       'Quelques heures par semaine',
       '1-2 jours par semaine',
@@ -106,33 +106,36 @@ const memberSchema = new mongoose.Schema({
   },
   motivation: {
     type: String,
-    required: [true, 'La motivation est requise'],
+    required: function () { return !this.googleId; },
     minlength: [20, 'La motivation doit contenir au moins 20 caractères']
   },
-  
+
   // === CONSENTEMENTS ===
   engagement_valeurs_mpb: {
     type: Boolean,
-    default: false,
-    required: [true, 'L\'engagement aux valeurs MPB est requis']
+    default: false
   },
   consentement_donnees: {
     type: Boolean,
-    default: false,
-    required: [true, 'Le consentement pour les données est requis']
+    default: false
   },
-  
+
   // === SYSTÈME ===
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true // Permet d'avoir plusieurs null
+  },
   password: {
     type: String,
-    required: [true, 'Le mot de passe est requis'],
+    required: function () { return !this.googleId; }, // Mot de passe requis si pas Google
     minlength: [8, 'Le mot de passe doit contenir au moins 8 caractères']
   },
   profileCompleted: {
     type: Boolean,
     default: false
   },
-  
+
   // === IDENTIFICATION ===
   memberId: {
     type: String,
@@ -142,7 +145,7 @@ const memberSchema = new mongoose.Schema({
     type: String,
     unique: true
   },
-  
+
   // === RÔLES ET PERMISSIONS ===
   role: {
     type: String,
@@ -153,7 +156,7 @@ const memberSchema = new mongoose.Schema({
     type: String,
     enum: ['view_members', 'edit_members', 'delete_members', 'create_events', 'manage_settings']
   }],
-  
+
   // === STATUT ===
   status: {
     type: String,
@@ -164,7 +167,7 @@ const memberSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  
+
   // === MÉTADONNÉES ===
   dateInscription: {
     type: Date,
@@ -183,18 +186,18 @@ const memberSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Member'
   },
-  
+
 }, {
   timestamps: true
 });
 
 // Middleware pre-save
-memberSchema.pre('save', async function(next) {
+memberSchema.pre('save', async function (next) {
   // Générer memberId
   if (!this.memberId) {
     this.memberId = 'MPB' + Date.now() + Math.random().toString(36).substr(2, 9).toUpperCase();
   }
-  
+
   // Générer membershipNumber
   if (!this.membershipNumber) {
     const prefix = 'MPB-';
@@ -202,39 +205,39 @@ memberSchema.pre('save', async function(next) {
     const year = new Date().getFullYear();
     this.membershipNumber = `${prefix}${year}-${random}`;
   }
-  
+
   // Date d'inscription formatée
   if (!this.subscriptionDate) {
     this.subscriptionDate = new Date().toLocaleDateString('fr-FR');
   }
-  
+
   // Vérifier si le profil est complet
   const postLoginFields = ['ville', 'ville_mobilisation', 'section', 'centres_interet_competences'];
-  const isProfileCompleted = postLoginFields.every(field => 
+  const isProfileCompleted = postLoginFields.every(field =>
     this[field] && this[field].trim() !== ''
   );
   this.profileCompleted = isProfileCompleted;
-  
+
   // Hash du mot de passe
   if (this.isModified('password')) {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }
-  
+
   next();
 });
 
 // ==================== SCRIPT D'INCRÉMENTATION D'ÂGE ====================
-memberSchema.statics.incrementAges = async function() {
+memberSchema.statics.incrementAges = async function () {
   try {
     const result = await this.updateMany(
       { age: { $lt: 100 } },
       { $inc: { age: 1 } }
     );
-    
+
     console.log(`✅ Âges incrémentés le ${new Date().toLocaleDateString('fr-FR')}`);
     console.log(`📊 Membres mis à jour: ${result.modifiedCount}`);
-    
+
     return result;
   } catch (error) {
     console.error('❌ Erreur lors de l\'incrémentation des âges:', error);
@@ -243,29 +246,29 @@ memberSchema.statics.incrementAges = async function() {
 };
 
 // Méthode pour vérifier le mot de passe
-memberSchema.methods.comparePassword = async function(candidatePassword) {
+memberSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
 // Méthode pour mettre à jour le profil post-connexion
-memberSchema.methods.updateProfile = async function(profileData) {
+memberSchema.methods.updateProfile = async function (profileData) {
   this.ville = profileData.ville || this.ville;
   this.ville_mobilisation = profileData.ville_mobilisation || this.ville_mobilisation;
   this.section = profileData.section || this.section;
   this.centres_interet_competences = profileData.centres_interet_competences || this.centres_interet_competences;
-  
+
   const postLoginFields = ['ville', 'ville_mobilisation', 'section', 'centres_interet_competences'];
-  const isProfileCompleted = postLoginFields.every(field => 
+  const isProfileCompleted = postLoginFields.every(field =>
     this[field] && this[field].trim() !== ''
   );
   this.profileCompleted = isProfileCompleted;
-  
+
   await this.save();
   return this;
 };
 
 // Méthode toJSON pour cacher le mot de passe
-memberSchema.methods.toJSON = function() {
+memberSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.password;
   delete obj.__v;
