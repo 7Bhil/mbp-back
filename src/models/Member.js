@@ -25,7 +25,7 @@ const memberSchema = new mongoose.Schema({
   // === ÂGE (direct, pas birthYear) ===
   age: {
     type: Number,
-    required: [true, 'L\'âge est requis'],
+    required: function () { return !this.googleId; }, // Requis si pas Google Auth
     min: [16, 'Vous devez avoir au moins 16 ans'],
     max: [100, 'Âge maximum 100 ans']
   },
@@ -43,14 +43,15 @@ const memberSchema = new mongoose.Schema({
   },
   telephone: {
     type: String,
-    required: [true, 'Le téléphone est requis'],
-    trim: true
+    required: function () { return !this.googleId; }, // Requis si pas Google Auth
+    trim: true,
+    sparse: true // Permet d'avoir plusieurs null si unique (si activé plus tard)
   },
 
   // === LOCALISATION (1ère partie - formulaire initial) ===
   pays: {
     type: String,
-    required: [true, 'Le pays est requis'],
+    required: function () { return !this.googleId; },
     default: 'Bénin'
   },
   departement: {
